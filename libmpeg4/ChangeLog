@@ -1,0 +1,41 @@
+1. 20100925 2h I frame right. add mpeg4_p1.c for 1h version.
+2. 20100925 10:38 add JXC_decode_picture_header and s->decode_mb. MP OK but xvid_6 no video.
+3. 20100926 xvid_6 has video, DX_1 crc wrong but no problum. msmpeg4 no test.
+4. 20100928 msmpeg4 ok
+5. 20101025 Linear buff base on two core version. Only I frame right.
+6. 20101027 MPEG4_P1_MAIN to 0xF4004000, add hd mc cfg.
+7. 20101027 MPS p-frame right, no idct.
+8. 20101028 1mv backward and 4mv.Fix bug about inter_maxtin parameter and frame height compare.
+9. 20101030 forward and backward combine for hpel, xvid_1_2 right.
+10.20101101 The mc check on behind, xvid_1_1 and mps right.
+11.20101103 Add quarter interpolation.
+12.20101104 Add edge opt
+13.20101108 Fix bug about mb err.
+14.20101112 Add pmon on p1.
+15.20101115 Add variable gp0.
+16.20101116 Add variable gp1.
+17.20101119 Add rota, change dest buff, change mb parameter set.
+18.20101120 Add pmon on p0. 
+19.20101122 Fix bug about gp1_poll, msmpeg4 right.
+20.20101124 Fix bug about last_index set in decode_mb, add allfrm pmon.
+JZ4770:
+1. 20110322 TCSM0 and TCSM1 right.
+2. 20110324 GP0 is right.
+3. 20110328 Fix bug about dMB->block value err. P1 run right,but value not check.
+4. 20110328 Use of independent vlc table.
+5. 20110329 jz4770 I-frame right.
+6. 20110331 mc 0mv right but frame not right.
+7. 20110401 1mv hpel right.
+8. 20110406 mc all right.
+9. 20110408 mau i-frame right.
+10.20110418 mau all frame right.
+11.20110623 Fix bug about yuv_dest buf, add yuv_dest2 for mau.
+JZ4780:
+1. 20120420 use memmb buf for all dMB, use gp2 instead of gp0.
+2. 20120423 use memmb buf for all dMB, use gp2 instead of gp0, 20120420 can not use.
+3. 20120425 write dMB to tcsm1 directry.
+4. 20120427 dblk for test right, but last_mb can not poll.
+5. 20120503 mau and dblk right for 1MB.
+6. 20120504 soft bs for test.
+7. 20120508 vdma at p0 is right.
+8. 20120511 vdma at p1 and 64k buf for dMB, two frame is right.
