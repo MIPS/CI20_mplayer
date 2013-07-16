@@ -487,7 +487,6 @@ static void finalize_matrix (mpeg2dec_t * mpeg2dec)
 		  coef_qt_hw[i_list][i]= coef_ptr[i];
 		}
 	    }      	
-	  printf("----hello qscale------\n");
     }
 #endif
 }
@@ -805,6 +804,7 @@ void mpeg2_header_picture_finalize (mpeg2dec_t * mpeg2dec, uint32_t accels)
 
 		y_size = decoder->stride_frame * mpeg2dec->sequence.height;
 		uv_size = y_size >> (2 - mpeg2dec->decoder.chroma_format);
+		printf("malloc yuv_buf\n");
 		mpeg2dec->yuv_buf[0][0] =
 		    (uint8_t *) mpeg2_malloc (y_size, MPEG2_ALLOC_YUV);
 		mpeg2dec->yuv_buf[0][1] =
@@ -832,6 +832,7 @@ void mpeg2_header_picture_finalize (mpeg2dec_t * mpeg2dec, uint32_t accels)
 
 		    fbuf = &mpeg2dec->fbuf_alloc[mpeg2dec->alloc_index++].fbuf;
 		    fbuf->id = NULL;
+		    printf("malloc fbuf->buf\n");
 		    fbuf->buf[0] =
 			(uint8_t *) mpeg2_malloc (convert_init.buf_size[0],
 						  MPEG2_ALLOC_CONVERTED);

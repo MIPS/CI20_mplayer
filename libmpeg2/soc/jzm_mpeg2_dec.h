@@ -4,14 +4,14 @@
 #ifndef __JZM_MPEG2_DEC_H__
 #define __JZM_MPEG2_DEC_H__
 #include "jzm_vpu.h"
-#define  JZM_SIMPLE
 
 /************************************************************
  Chain Space Allocation
  ************************************************************/
-#define TCSM1_BANK0         (0x132C0000)
-#define SRAM_BANK0          (0x132F0000)
+#define TCSM1_BANK0         (VPU_BASE | 0xC0000)
+#define SRAM_BANK0          (VPU_BASE | 0xF0000)
 
+#define JZM_SIMPLE
 #ifdef  JZM_SIMPLE
 #define MPEG2_FIFO_DEP          8
 #else
@@ -50,6 +50,7 @@
 
 #define DOUT_Y_STRD  (16)
 #define DOUT_C_STRD  (8)
+
 
 
 /* ----------------- SDE VLC TABLE ---------------- */
@@ -268,10 +269,10 @@ __place_k0_data__ int DMV_2_HW[1] = {
 	       (f_code_b1& F_CODE_B1_MSK) << F_CODE_B1_SFT);		\
   })									
 
-#define SCH1_DSA  0x13200070
-#define SCH2_DSA  0x13200074
-#define SCH3_DSA  0x13200078
-#define SCH4_DSA  0x1320007C
+#define SCH1_DSA  (VPU_BASE | 0x00070)
+#define SCH2_DSA  (VPU_BASE | 0x00074)
+#define SCH3_DSA  (VPU_BASE | 0x00078)
+#define SCH4_DSA  (VPU_BASE | 0x0007C)
 
 #define I_TYPE 1
 #define P_TYPE 2

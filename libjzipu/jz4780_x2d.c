@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "libmpcodecs/vf.h"
+#include "libswscale/swscale_internal.h"
 
 static int x2d_Init = 0;
 static struct fb_fix_screeninfo fb_fix_info;
@@ -72,16 +73,27 @@ static int debug_set_buffer_color_bar(void * addr, int width, int height, int st
 //#ifdef USE_JZ4780_DMMU
 static int mapIPUSourceBuffer(struct vf_instance *vf, mp_image_t *mpi)
 {
-	int ysize = (vf->priv->w * vf->priv->h);
-	int uvsize = ysize / 2;
-
-	//printf("mpi->planes[] %#x, %#x %#x\n", mpi->planes[0], mpi->planes[1], mpi->planes[1]);
-	//printf("mpi->stride[] %#x, %#x %#x\n", mpi->stride[0], mpi->stride[1], mpi->stride[1]);
-
-	if ((dmmu_match_user_mem_tlb(mpi->planes[0], ysize) == 0) && (dmmu_match_user_mem_tlb(mpi->planes[1], uvsize) == 0)) {
-		if ((dmmu_map_user_mem(mpi->planes[0], ysize) == 0) && (dmmu_map_user_mem(mpi->planes[1], uvsize) == 0)) {
-			LOG_DBG("mapIPUSourceBuffer successed\n");
-			return 0;
+	struct SwsContext *c = vf->priv->ctx;
+	int ysize = (c->srcW * c->srcH);
+	if (mpi->ipu_line) {
+		int uvsize = ysize / 2;
+		if ((dmmu_match_user_mem_tlb(mpi->planes[0], ysize) == 0) && (dmmu_match_user_mem_tlb(mpi->planes[1], uvsize) == 0)) {
+			if ((dmmu_map_user_mem(mpi->planes[0], ysize) == 0) && (dmmu_map_user_mem(mpi->planes[1], uvsize) == 0)) {
+				//printf("mapIPUSourceBuffer successed\n");
+				return 0;
+			}
+		}
+	} else {
+		int uvsize = ysize / 4;
+		if ((dmmu_match_user_mem_tlb(mpi->planes[0], ysize) == 0)
+			&& (dmmu_match_user_mem_tlb(mpi->planes[1], uvsize) == 0)
+			&& (dmmu_match_user_mem_tlb(mpi->planes[2], uvsize) == 0)) {
+			if ((dmmu_map_user_mem(mpi->planes[0], ysize) == 0)
+				&& (dmmu_map_user_mem(mpi->planes[1], uvsize) == 0)
+				&& (dmmu_map_user_mem(mpi->planes[2], uvsize) == 0)) {
+				//printf("mapIPUSourceBuffer successed\n");
+				return 0;
+			}
 		}
 	}
 	printf("mapIPUSourceBuffer failed\n");
@@ -90,11 +102,22 @@ static int mapIPUSourceBuffer(struct vf_instance *vf, mp_image_t *mpi)
 
 static int unmapIPUSourceBuffer(struct vf_instance *vf, mp_image_t *mpi)
 {
-	int ysize = (vf->priv->w * vf->priv->h);
-	int uvsize = ysize / 2;
-	if ((dmmu_unmap_user_mem(mpi->planes[0], ysize) == 0) && (dmmu_unmap_user_mem(mpi->planes[1], uvsize) == 0)) {
-		LOG_DBG("unmapIPUSourceBuffer successed\n");
-		return 0;
+	struct SwsContext *c = vf->priv->ctx;
+	int ysize = (c->srcW * c->srcH);
+	if (mpi->ipu_line) {
+		int uvsize = ysize / 2;
+		if ((dmmu_unmap_user_mem(mpi->planes[0], ysize) == 0) && (dmmu_unmap_user_mem(mpi->planes[1], uvsize) == 0)) {
+			//printf("unmapIPUSourceBuffer successed\n");
+			return 0;
+		}
+	} else {
+		int uvsize = ysize / 4;
+		if ((dmmu_unmap_user_mem(mpi->planes[0], ysize) == 0)
+			&& (dmmu_unmap_user_mem(mpi->planes[1], uvsize) == 0)
+			&& (dmmu_unmap_user_mem(mpi->planes[2], uvsize) == 0)) {
+			//printf("unmapIPUSourceBuffer successed\n");
+			return 0;
+		}
 	}
 	printf("unmapIPUSourceBuffer failed\n");
 	return -1;
@@ -226,6 +249,7 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 	/* debug set colorbar */
 	//memset (mpi->planes[0], 0, vf->priv->w*vf->priv->h);
 	//debug_set_buffer_color_bar(mpi->planes[0], vf->priv->w, vf->priv->h/4, vf->priv->w*4, 4);
+	SwsContext *c = vf->priv->ctx;
 
 	/* map address */
 	if (mapIPUDestBuffer(fb_var_info.xres, fb_var_info.yres, fb_var_info.bits_per_pixel, fb_vaddr) < 0) {
@@ -237,18 +261,37 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 
 	LOG_DBG("x2d_init x2d src. line: %d", __LINE__);
 	x2d_GlbInfo->layer_num = 1;
-	x2d_Layer[0]->format = HAL_PIXEL_FORMAT_JZ_YUV_420_B;
-	//x2d_Layer[0]->format = HAL_PIXEL_FORMAT_RGBA_8888;
-	x2d_Layer[0]->in_width = vf->priv->w;
-	x2d_Layer[0]->in_height = vf->priv->h;
+	if (mpi->ipu_line) {
+		x2d_Layer[0]->format = HAL_PIXEL_FORMAT_JZ_YUV_420_B;
+		x2d_Layer[0]->in_width = c->srcW;
+		x2d_Layer[0]->in_height = c->srcH;
+	} else {
+		x2d_Layer[0]->format = HAL_PIXEL_FORMAT_JZ_YUV_420_P;
+		x2d_Layer[0]->in_width = c->srcW;
+		x2d_Layer[0]->in_height = c->srcH & ~(0xf - 0x1);
+	}
 	x2d_Layer[0]->out_width = fb_var_info.xres;
 	x2d_Layer[0]->out_height = fb_var_info.yres;
 
 	x2d_Layer[0]->addr = mpi->planes[0];
 	x2d_Layer[0]->u_addr = mpi->planes[1];
-	x2d_Layer[0]->v_addr = mpi->planes[1];
+	if (mpi->ipu_line) {
+		x2d_Layer[0]->v_addr = mpi->planes[1];
+	} else {
+		x2d_Layer[0]->v_addr = mpi->planes[2];
+	}
+#if 0
 	x2d_Layer[0]->y_stride = vf->priv->w; /* X2D recaculater YUV420_TILE stride_new = stride_orig*16 */
 	x2d_Layer[0]->v_stride = vf->priv->w/2;
+#else
+	x2d_Layer[0]->y_stride = mpi->stride[0]; /* X2D recaculater YUV420_TILE stride_new = stride_orig*16 */
+	x2d_Layer[0]->v_stride = mpi->stride[1];
+	if (mpi->ipu_line) {
+		x2d_Layer[0]->v_stride = mpi->stride[1];
+	} else {
+		x2d_Layer[0]->v_stride = mpi->stride[2];
+	}
+#endif
 	
 	x2d_Layer[0]->glb_alpha_en = 1;
 	x2d_Layer[0]->global_alpha_val = 0xff;

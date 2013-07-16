@@ -26,6 +26,7 @@
 #include <string.h>	/* memcmp/memset, try to remove */
 #include <stdlib.h>
 #include <inttypes.h>
+#include <stdio.h>
 
 #include "mpeg2.h"
 #include "attributes.h"
@@ -39,11 +40,33 @@
 
 #ifdef MPEG2_SCH_CONTROL
 #include "soc/mpeg2_dcore.h"
-volatile unsigned char * vdma_base;
-volatile unsigned int * bs_data;
+#endif
+
+#define MPEG2_CRC_CODE
+#ifdef MPEG2_CRC_CODE
+#include "libjzcommon/crc.c"
+short crc_code = 0;
 #endif
 
 static int mpeg2_accels = 0;
+extern int use_jz_buf;
+extern volatile unsigned char *cpm_base;
+
+#define CPM_VPU_SWRST    (cpm_base + 0xC4)
+#define CPM_VPU_SR     	 (0x1<<31)
+#define CPM_VPU_STP    	 (0x1<<30)
+#define CPM_VPU_ACK    	 (0x1<<29)
+
+#define write_cpm_reg(a)    (*(volatile unsigned int *)(CPM_VPU_SWRST) = a)
+#define read_cpm_reg()      (*(volatile unsigned int *)(CPM_VPU_SWRST))
+
+#define RST_VPU()            \
+{\
+     write_cpm_reg(read_cpm_reg() | CPM_VPU_STP); \
+     while( !(read_cpm_reg() & CPM_VPU_ACK) );  \
+     write_cpm_reg( (read_cpm_reg() | CPM_VPU_SR) & (~CPM_VPU_STP) ); \
+     write_cpm_reg( read_cpm_reg() & (~CPM_VPU_SR) & (~CPM_VPU_STP) ); \
+}
 
 #define BUFFER_SIZE (1194 * 1024)
 
@@ -161,30 +184,249 @@ mpeg2_state_t mpeg2_seek_header (mpeg2dec_t * mpeg2dec)
 
 #define RECEIVED(code,state) (((state) << 8) + (code))
 
-static void prin_crc(const char * src_y, const char * src_uv, int mb_num)
-{
-    unsigned char * crc_y = src_y;
-    unsigned char * crc_uv = src_uv;
-    int i, j;
-    for(i = 0; i < mb_num; i++){
-      printf("--------------- block : %d -----------------\n", i);
-      printf("---------------- Y -------------------------\n");
-      for(j = 0; j < 16; j++)
-        printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n", crc_y[0], crc_y[1], crc_y[2], crc_y[3], crc_y[4], crc_y[5], crc_y[6], crc_y[7], crc_y[8], crc_y[9], crc_y[10], crc_y[11], crc_y[12], crc_y[13], crc_y[14], crc_y[15]);
-      crc_y += 256;
-      printf("---------------- C -------------------------\n");
-      for(j = 0; j < 8; j++)
-        printf("%2x %2x %2x %2x %2x %2x %2x %2x ** %2x %2x %2x %2x %2x %2x %2x %2x\n", crc_uv[0], crc_uv[1], crc_uv[2], crc_uv[3], crc_uv[4], crc_uv[5], crc_uv[6], crc_uv[7], crc_uv[8], crc_uv[9], crc_uv[10], crc_uv[11], crc_uv[12], crc_uv[13], crc_uv[14], crc_uv[15]);
-      crc_uv += 128;
+extern int frame_num;
+
+static void fprint_refcall(mpeg2dec_t *mpeg2dec){
+  FILE *fp = fopen("./reftt2", "w+");
+  if (fp == NULL){
+    printf("fopen failure\n");
+    return NULL;
+  }
+
+  unsigned char *yptr = mpeg2dec->decoder.f_motion.ref[0][0];
+  unsigned char *cptr = mpeg2dec->decoder.f_motion.ref[0][1];
+
+  int mb_width = mpeg2dec->decoder.width / 16;
+  int mb_height = mpeg2dec->decoder.height / 16;
+  int i, j, m, n, o;
+  int sft[4] = {0, 8, 8*16, 8*16+8};
+
+  fprintf(fp, "ref mpFrame:%d\n", frame_num);
+  yptr = mpeg2dec->decoder.f_motion.ref[0][0];
+  for (j = 0; j < mb_height; j++){
+    for (i = 0; i < mb_width; i++){
+      fprintf(fp, "mb_x:%d mb_y:%d\n", i, j);
+      for (n = 0; n < 16; n++){
+	for (m = 0; m < 16; m++){
+	  fprintf(fp, "0x%02x, ", yptr[m]);
+	}
+	yptr+=16;
+	fprintf(fp, "\n");
+      }
+      fprintf(fp, "\n");
     }
+  }
+
+  cptr = mpeg2dec->decoder.f_motion.ref[0][1];
+  for (j = 0; j < mb_height; j++){
+    for (i = 0; i < mb_width; i++){
+      fprintf(fp, "mb_x:%d mb_y:%d\n", i, j);
+      for (n = 0; n < 8; n++){
+	for (m = 0; m < 8; m++){
+	  fprintf(fp, "0x%02x, ", cptr[m]);
+	}
+	cptr+=16;
+	fprintf(fp, "\n");
+      }
+      fprintf(fp, "\n");
+    }
+  }
+
+  cptr = mpeg2dec->decoder.f_motion.ref[0][1];
+  cptr += 8;
+  for (j = 0; j < mb_height; j++){
+    for (i = 0; i < mb_width; i++){
+      fprintf(fp, "mb_x:%d mb_y:%d\n", i, j);
+      for (n = 0; n < 8; n++){
+	for (m = 0; m < 8; m++){
+	  fprintf(fp, "0x%02x, ", cptr[m]);
+	}
+	cptr+=16;
+	fprintf(fp, "\n");
+      }
+      fprintf(fp, "\n");
+    }
+  }
+
+  yptr = mpeg2dec->decoder.b_motion.ref[0][0];
+  for (j = 0; j < mb_height; j++){
+    for (i = 0; i < mb_width; i++){
+      fprintf(fp, "mb_x:%d mb_y:%d\n", i, j);
+      for (n = 0; n < 16; n++){
+	for (m = 0; m < 16; m++){
+	  fprintf(fp, "0x%02x, ", yptr[m]);
+	}
+	yptr+=16;
+	fprintf(fp, "\n");
+      }
+      fprintf(fp, "\n");
+    }
+  }
+
+  cptr = mpeg2dec->decoder.b_motion.ref[0][1];
+  for (j = 0; j < mb_height; j++){
+    for (i = 0; i < mb_width; i++){
+      fprintf(fp, "mb_x:%d mb_y:%d\n", i, j);
+      for (n = 0; n < 8; n++){
+	for (m = 0; m < 8; m++){
+	  fprintf(fp, "0x%02x, ", cptr[m]);
+	}
+	cptr+=16;
+	fprintf(fp, "\n");
+      }
+      fprintf(fp, "\n");
+    }
+  }
+
+  cptr = mpeg2dec->decoder.b_motion.ref[0][1];
+  cptr += 8;
+  for (j = 0; j < mb_height; j++){
+    for (i = 0; i < mb_width; i++){
+      fprintf(fp, "mb_x:%d mb_y:%d\n", i, j);
+      for (n = 0; n < 8; n++){
+	for (m = 0; m < 8; m++){
+	  fprintf(fp, "0x%02x, ", cptr[m]);
+	}
+	cptr+=16;
+	fprintf(fp, "\n");
+      }
+      fprintf(fp, "\n");
+    }
+  }
+
+  fclose(fp);
+  return;
 }
 
-int save_copied;
-extern int frame_num;
+static void fprint_call(mpeg2dec_t *mpeg2dec){
+  FILE *fp = fopen("./tt2", "w+");
+  if (fp == NULL){
+    printf("fopen failure\n");
+    return NULL;
+  }
+
+  unsigned char *yptr = mpeg2dec->decoder.picture_dest[0];
+  unsigned char *cptr = mpeg2dec->decoder.picture_dest[1];
+  int mb_width = mpeg2dec->decoder.width / 16;
+  int mb_height = mpeg2dec->decoder.height / 16;
+  int i, j, m, n, o;
+  int sft[4] = {0, 8, 8*16, 8*16+8};
+
+  fprintf(fp, "mpFrame:%d\n", frame_num);
+  for (j = 0; j < mb_height; j++){
+    //yptr = mpeg2dec->decoder.picture_dest[0];
+    //yptr = mpeg2dec->decoder.t_yptr;
+    //yptr += j * mpeg2dec->decoder.y_stride;
+    for (i = 0; i < mb_width; i++){
+      fprintf(fp, "mb_x:%d mb_y:%d\n", i, j);
+      for (n = 0; n < 16; n++){
+	for (m = 0; m < 16; m++){
+	  fprintf(fp, "0x%02x, ", yptr[m]);
+	}
+	yptr+=16;
+	fprintf(fp, "\n");
+      }
+      fprintf(fp, "\n");
+    }
+  }
+
+  cptr = mpeg2dec->decoder.picture_dest[1];
+  for (j = 0; j < mb_height; j++){
+    for (i = 0; i < mb_width; i++){
+      fprintf(fp, "mb_x:%d mb_y:%d\n", i, j);
+      for (n = 0; n < 8; n++){
+	for (m = 0; m < 8; m++){
+	  fprintf(fp, "0x%02x, ", cptr[m]);
+	}
+	cptr+=16;
+	fprintf(fp, "\n");
+      }
+      fprintf(fp, "\n");
+    }
+  }
+
+  cptr = mpeg2dec->decoder.picture_dest[1];
+  cptr += 8;
+  for (j = 0; j < mb_height; j++){
+    for (i = 0; i < mb_width; i++){
+      fprintf(fp, "mb_x:%d mb_y:%d\n", i, j);
+      for (n = 0; n < 8; n++){
+	for (m = 0; m < 8; m++){
+	  fprintf(fp, "0x%02x, ", cptr[m]);
+	}
+	cptr+=16;
+	fprintf(fp, "\n");
+      }
+      fprintf(fp, "\n");
+    }
+  }
+
+  fclose(fp);
+  return;
+}
+
+void mpeg2_crc(mpeg2dec_t * mpeg2dec){
+#ifdef MPEG2_CRC_CODE
+  unsigned char *y_ptr = NULL;
+  unsigned char *c_ptr = NULL;
+  int mb_width = mpeg2dec->decoder.stride_frame>>4;
+  int mb_height= mpeg2dec->decoder.height>>4;
+  int j = 0;
+
+  //crc_code = 0;
+
+  y_ptr = mpeg2dec->decoder.picture_dest[0];
+  c_ptr = mpeg2dec->decoder.picture_dest[1];
+  for (j = 0; j < mb_height; j++){
+      crc_code = crc(y_ptr, mb_width * 256, crc_code);
+      crc_code = crc(c_ptr, mb_width * 128, crc_code);
+      y_ptr += (mb_width * 256);
+      c_ptr += (mb_width * 128);
+  }
+
+  mp_msg(NULL, NULL, "%d  crc_code:0x%04x %d\n", frame_num, crc_code, mpeg2dec->decoder.coding_type);
+#endif
+}
+
+#if 0
+#undef sprintf
+#undef fprintf
+static void dump_frame_data(mpeg2dec_t * mpeg2dec)
+{
+    int i, j, k;
+    int mb_width = mpeg2dec->decoder.width / 16;
+    int mb_height = mpeg2dec->decoder.height / 16;
+    unsigned char *yptr = mpeg2dec->decoder.picture_dest[0];
+    unsigned char *cptr = mpeg2dec->decoder.picture_dest[1];
+    char filename[100];
+    sprintf(filename, "frame_data%d.c", frame_num);
+    FILE * fp = fopen(filename, "w+");
+    for (i = 0; i < mb_height; i++)
+	for (j = 0; j < mb_width; j++) {
+	    fprintf(fp, "mb_pos : %d %d\nY:\n", i, j);
+	    for (k = 0; k < 16; k++) {
+		fprintf(fp, "0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x"
+			" 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n",
+			yptr[0], yptr[1], yptr[2], yptr[3], yptr[4], yptr[5], yptr[6], yptr[7],
+			yptr[8], yptr[9], yptr[10], yptr[11], yptr[12], yptr[13], yptr[14], yptr[15]);
+		yptr += 16;
+	    }
+	    for (k = 0; k < 8; k++) {
+		fprintf(fp, "0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x **"
+			" 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n",
+			cptr[0], cptr[1], cptr[2], cptr[3], cptr[4], cptr[5], cptr[6], cptr[7],
+			cptr[8], cptr[9], cptr[10], cptr[11], cptr[12], cptr[13], cptr[14], cptr[15]);
+		cptr += 16;
+	    }
+	}
+    fclose(fp);
+}
+#endif
+
 mpeg2_state_t mpeg2_parse (mpeg2dec_t * mpeg2dec)
 {
     int size_buffer, size_chunk, copied;
-
+    int frame_flag = 0;
     if (mpeg2dec->action) {
 	mpeg2_state_t state;
 
@@ -193,6 +435,7 @@ mpeg2_state_t mpeg2_parse (mpeg2dec_t * mpeg2dec)
 	    return state;
     }
 
+    RST_VPU();
     while (1) {
 	while ((unsigned) (mpeg2dec->code - mpeg2dec->first_decode_slice) <
 	       mpeg2dec->nb_decode_slices) {
@@ -215,21 +458,31 @@ mpeg2_state_t mpeg2_parse (mpeg2dec_t * mpeg2dec)
 		    return STATE_INVALID;
 		}
 	    }
-            save_copied = copied;
+            mpeg2dec->decoder.tbslen = copied;
 	    mpeg2dec->bytes_since_tag += copied;
 
             /* decode a slice */
 	    mpeg2_slice (&(mpeg2dec->decoder), mpeg2dec->code,
 			 mpeg2dec->chunk_start);
+	    frame_flag = 1;
 	    mpeg2dec->code = mpeg2dec->buf_start[-1];
 	    mpeg2dec->chunk_ptr = mpeg2dec->chunk_start;
 	}
-/*         mpeg2_decoder_t * const decoder = &(mpeg2dec->decoder); */
-/*         prin_crc(decoder->picture_dest[0], decoder->picture_dest[1], (decoder->stride_frame>>4) * (decoder->height>>4)); */
 	if ((unsigned) (mpeg2dec->code - 1) >= 0xb0 - 1)
 	    break;
 	if (seek_chunk (mpeg2dec) == STATE_BUFFER)
 	    return STATE_BUFFER;
+    }
+
+    if (frame_flag == 1){
+	frame_num++;
+#ifdef MPEG2_CRC_CODE
+	if (frame_num == 2){
+	    fprint_refcall(mpeg2dec);
+	    fprint_call(mpeg2dec);
+	}
+	mpeg2_crc(mpeg2dec);
+#endif
     }
 
     mpeg2dec->action = mpeg2_seek_header;
@@ -364,7 +617,7 @@ int mpeg2_stride (mpeg2dec_t * mpeg2dec, int stride)
 void mpeg2_set_buf (mpeg2dec_t * mpeg2dec, uint8_t * buf[3], void * id)
 {
     mpeg2_fbuf_t * fbuf;
-
+    
     if (mpeg2dec->custom_fbuf) {
 	if (mpeg2dec->state == STATE_SEQUENCE) {
 	    mpeg2dec->fbuf[2] = mpeg2dec->fbuf[1];
@@ -381,6 +634,7 @@ void mpeg2_set_buf (mpeg2dec_t * mpeg2dec, uint8_t * buf[3], void * id)
     fbuf->buf[1] = buf[1];
     fbuf->buf[2] = buf[2];
     fbuf->id = id;
+
     // HACK! FIXME! At first I frame, copy pointers to prediction frame too!
     if (mpeg2dec->custom_fbuf && !mpeg2dec->fbuf[1]->buf[0]) {
 	mpeg2dec->fbuf[1]->buf[0] = buf[0];
@@ -464,6 +718,7 @@ mpeg2dec_t * mpeg2_init (void)
     if (mpeg2dec == NULL)
 	return NULL;
 
+    memset (mpeg2dec, 0, sizeof (mpeg2dec_t));
     memset (mpeg2dec->decoder.DCTblock, 0, 64 * sizeof (int16_t));
     memset (mpeg2dec->quantizer_matrix, 0, 4 * 64 * sizeof (uint8_t));
 
@@ -484,10 +739,15 @@ mpeg2dec_t * mpeg2_init (void)
     frame_num = 0;
 #ifdef MPEG2_SCH_CONTROL
     printf("---------------- mpeg2_ACFG_config malloc ---------------\n");
-    vdma_base = (uint8_t *) jz4740_alloc_frame(128, 0x2000);
-    memset(vdma_base, 0, 0x2000);
-    bs_data = (uint8_t *) jz4740_alloc_frame(4, BUFFER_SIZE + 4);
+    mpeg2dec->decoder.vdma_base = (uint8_t *) jz4740_alloc_frame(128, 0x2000);
+    memset(mpeg2dec->decoder.vdma_base, 0, 0x2000);
+    mpeg2dec->decoder.tbsbuf = (uint8_t *) jz4740_alloc_frame(4, BUFFER_SIZE + 4);
 #endif
+
+#ifdef MPEG2_CRC_CODE
+    crc_code = 0;
+#endif
+    use_jz_buf = 1;
 
     return mpeg2dec;
 }
@@ -498,7 +758,4 @@ void mpeg2_close (mpeg2dec_t * mpeg2dec)
     mpeg2_header_state_init (mpeg2dec);
     mpeg2_free (mpeg2dec->chunk_buffer);
     mpeg2_free (mpeg2dec);
-#ifdef MPEG2_SCH_CONTROL
-    mpeg2_free (vdma_base);
-#endif
 }

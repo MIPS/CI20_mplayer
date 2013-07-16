@@ -55,6 +55,7 @@
 #define B_TYPE 3
 #define D_TYPE 4
 
+#include "soc/mpeg2_dcore.h"
 typedef void mpeg2_mc_fct (uint8_t *, const uint8_t *, int, int);
 
 typedef struct {
@@ -161,6 +162,11 @@ struct mpeg2_decoder_s {
     int quantizer_scale;
     char* quant_store;
     int quant_stride;
+
+    _M2D_SliceInfo slice_info_hw;
+    int *tbsbuf;
+    int tbslen;
+    volatile unsigned char * vdma_base;
 };
 
 typedef struct {

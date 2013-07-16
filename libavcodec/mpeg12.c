@@ -2515,7 +2515,7 @@ AVCodec mpeg1video_decoder = {
     .long_name= NULL_IF_CONFIG_SMALL("MPEG-1 video"),
 };
 
-#if 1 
+#if 1
 AVCodec mpeg2video_decoder = {
     "mpeg2video",
     AVMEDIA_TYPE_VIDEO,
