@@ -347,7 +347,7 @@ int jz4780_put_image_x2d(struct vf_instance *vf, mp_image_t *mpi, double pts)
 		return 0;
 	}
 
-	return 0;
+	return 1;
 }
 
 
