@@ -359,6 +359,8 @@ static int initIPUDestBuffer(int dstW, int dstH)
 
 	dst->fmt = HAL_PIXEL_FORMAT_BGRX_8888;
 	//dst->fmt = HAL_PIXEL_FORMAT_RGBX_8888;
+	dstW = dstW > fb_var_info.xres ? fb_var_info.xres : dstW;
+	dstH = dstH > fb_var_info.yres ? fb_var_info.yres : dstH;
 	dst->width= dstW ? dstW : fb_var_info.xres;
 	dst->height = dstH ? dstH : fb_var_info.yres;
 	dst->left = (fb_var_info.xres - dst->width) / 2;
@@ -460,7 +462,7 @@ int jz4780_put_image (struct vf_instance *vf, mp_image_t *mpi, double pts)
 
 	updateVideo(vf, mpi, pts);
 
-	return 0;	
+	return 1;
 }
 
 
