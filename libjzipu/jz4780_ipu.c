@@ -332,7 +332,7 @@ int clear_the_dst_area(struct dest_data_info *dst)
 	return 0;
 }
 
-static int initIPUDestBuffer(int dstW, int dstH)
+static int initIPUDestBuffer(int posX, int posY, int dstW, int dstH)
 {
 	int bytes_per_pixel;
 	struct dest_data_info *dst;
@@ -363,8 +363,21 @@ static int initIPUDestBuffer(int dstW, int dstH)
 	dstH = dstH > fb_var_info.yres ? fb_var_info.yres : dstH;
 	dst->width= dstW ? dstW : fb_var_info.xres;
 	dst->height = dstH ? dstH : fb_var_info.yres;
-	dst->left = (fb_var_info.xres - dst->width) / 2;
-	dst->top = (fb_var_info.yres - dst->height) / 2;
+	if ((posX >= 0) && (posY >= 0)) {
+		dst->left = posX % fb_var_info.xres;
+		dst->top = posY % fb_var_info.yres;
+	} else {
+		dst->left = (fb_var_info.xres - dst->left) / 2;
+		dst->top = (fb_var_info.yres - dst->height) / 2;
+	}
+	if (dst->width + posX > fb_var_info.xres) {
+		dst->width = fb_var_info.xres - dst->left;
+	}
+
+	if (dst->height + posY > fb_var_info.yres) {
+		dst->height = fb_var_info.yres - dst->top;
+	}
+
 	bytes_per_pixel = fb_fix_info.line_length / fb_var_info.xres;
 
 	//clear_the_dst_area(dst);
@@ -398,7 +411,7 @@ static int updateVideo(struct vf_instance *vf, mp_image_t *mpi, double pts)
 	}
 
 	if (mIPU_inited == 0) {
-		initIPUDestBuffer(vf->priv->ctx->dstW, vf->priv->ctx->dstH);
+		initIPUDestBuffer(vf->posx, vf->posy, vf->priv->ctx->dstW, vf->priv->ctx->dstH);
 		initIPUSourceBuffer(vf, mpi, pts);
 #ifdef USE_JZ4780_DMMU
 		mapIPUSourceBuffer(vf, mpi);

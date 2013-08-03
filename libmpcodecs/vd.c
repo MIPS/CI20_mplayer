@@ -125,6 +125,8 @@ int softzoom = 0;
 int flip = -1;
 int opt_screen_size_x = 0;
 int opt_screen_size_y = 0;
+int opt_screen_pos_x = -1;
+int opt_screen_pos_y = -1;
 float screen_size_xy = 0;
 float movie_aspect = -1.0;
 int vo_flags = 0;
@@ -355,6 +357,8 @@ int mpcodecs_config_vo(sh_video_t *sh, int w, int h,
 
     vf->w = sh->disp_w;
     vf->h = sh->disp_h;
+    vf->posx = opt_screen_pos_x;
+    vf->posy = opt_screen_pos_y;
     if (vf_config_wrapper
         (vf, sh->disp_w, sh->disp_h, screen_size_x, screen_size_y, vocfg_flags,
          out_fmt) == 0) {

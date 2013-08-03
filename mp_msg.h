@@ -139,6 +139,8 @@ void mp_msg_init(void);
 int mp_msg_test(int mod, int lev);
 
 #include "config.h"
+#include <execinfo.h>
+#include <stdlib.h>
 
 #ifdef __GNUC__
 void mp_msg(int mod, int lev, const char *format, ... ) __attribute__ ((format (printf, 3, 4)));
@@ -157,5 +159,5 @@ void mp_msg(int mod, int lev, const char *format, ... );
 #endif /* __GNUC__ */
 
 const char* filename_recode(const char* filename);
-
+void print_trace(void);
 #endif /* MPLAYER_MP_MSG_H */
