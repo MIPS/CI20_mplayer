@@ -79,7 +79,7 @@ typedef struct vf_instance {
     unsigned int default_caps; // used by default query_format()
     unsigned int default_reqs; // used by default config()
     // data:
-    int w, h;
+    int w, h, posx, posy;
     vf_image_context_t imgctx;
     vf_format_context_t fmt;
     struct vf_instance *next;

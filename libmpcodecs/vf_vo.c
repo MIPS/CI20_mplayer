@@ -55,7 +55,8 @@ static int config(struct vf_instance *vf,
   if(video_out->info)
   { const vo_info_t *info = video_out->info;
     mp_msg(MSGT_CPLAYER,MSGL_INFO,"VO: [%s] %dx%d => %dx%d %s %s%s%s%s\n",info->short_name,
-         width, height,
+         //width, height,
+	 vf->w, vf->h,
          d_width, d_height,
 	 vo_format_name(outfmt),
          (flags&VOFLAG_FULLSCREEN)?" [fs]":"",

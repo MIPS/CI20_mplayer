@@ -45,7 +45,7 @@ uint8_t idct_row_max,idct_row_max_intra;
 #include "mpeg2_idct_mxu.c"
 #endif
 
-#define JZM_DEBUG_MPEG2
+//#define JZM_DEBUG_MPEG2
 #ifdef JZM_DEBUG_MPEG2
 #include "../libjzcommon/crc.c"
 #undef printf

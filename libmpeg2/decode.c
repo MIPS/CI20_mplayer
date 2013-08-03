@@ -42,7 +42,7 @@
 #include "soc/mpeg2_dcore.h"
 #endif
 
-#define MPEG2_CRC_CODE
+//#define MPEG2_CRC_CODE
 #ifdef MPEG2_CRC_CODE
 #include "libjzcommon/crc.c"
 short crc_code = 0;
