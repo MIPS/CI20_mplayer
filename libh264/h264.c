@@ -69,8 +69,8 @@ extern volatile unsigned char *cpm_base;
 #include"jzm_h264_dec.h" 
 #include"jzm_h264_dec.c" 
 
-#ifndef JZC_CRC_VER     
-#define JZC_CRC_VER     
+//#define JZC_CRC_VER
+#ifdef JZC_CRC_VER
 # undef   fprintf
 # undef   printf
 # include "../libjzcommon/crc.c"

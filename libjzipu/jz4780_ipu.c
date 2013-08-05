@@ -367,7 +367,7 @@ static int initIPUDestBuffer(int posX, int posY, int dstW, int dstH)
 		dst->left = posX % fb_var_info.xres;
 		dst->top = posY % fb_var_info.yres;
 	} else {
-		dst->left = (fb_var_info.xres - dst->left) / 2;
+		dst->left = (fb_var_info.xres - dst->width) / 2;
 		dst->top = (fb_var_info.yres - dst->height) / 2;
 	}
 	if (dst->width + posX > fb_var_info.xres) {

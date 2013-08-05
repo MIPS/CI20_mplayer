@@ -11,7 +11,7 @@
 #define TCSM1_BANK0         (VPU_BASE | 0xC0000)
 #define SRAM_BANK0          (VPU_BASE | 0xF0000)
 
-#define JZM_SIMPLE
+//#define JZM_SIMPLE
 #ifdef  JZM_SIMPLE
 #define MPEG2_FIFO_DEP          8
 #else
