@@ -2,7 +2,7 @@
 #ifndef __JZM_VC1_DATA_H__
 #define __JZM_VC1_DATA_H__
 
-#define JZM_SIMPLE
+//#define JZM_SIMPLE
 /*------------- vram def --------------*/
 #define VRAM_TCSM1_BASE (0x132C0000)
 #define VRAM_SRAM_BASE  (0x132F0000)

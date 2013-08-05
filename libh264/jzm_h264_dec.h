@@ -7,7 +7,7 @@
 #ifndef _JZM_H264_API_H_
 #define _JZM_H264_API_H_
 
-#define JZM_SIMPLE
+//#define JZM_SIMPLE
 /*-------------- vmem def --------------*/
 #define VRAM_TCSM1_BASE (0x132C0000)
 #define VRAM_SRAM_BASE  (0x132F0000)

@@ -3143,11 +3143,13 @@ static void jzm_vc1_blocks_init (VC1Context *v)
     hwinfo->mspel                                       = v->s.mspel;
     hwinfo->use_ic                                      = v->use_ic;
 
+
     if ( (s->pict_type == FF_P_TYPE) && (v->mv_mode == MV_PMODE_INTENSITY_COMP) ) {
         hwinfo->lumscale = v->lumscale;
         hwinfo->lumshift = v->lumshift;
     }
 
+    hwinfo->frm_edge = 0;
     if(v->dqprofile == DQPROFILE_SINGLE_EDGE)
         hwinfo->frm_edge = 1 << v->dqsbedge;
     else if(v->dqprofile == DQPROFILE_DOUBLE_EDGES)
