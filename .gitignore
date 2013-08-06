@@ -47,6 +47,9 @@ libavcodec/qdm2_tables.h
 libavcodec/sin_tables.c
 mplayer
 version.h
+config.h
+config.log
+config.mak
 
 #
 # git files that we don't want to ignore even it they are dot-files
