@@ -1360,6 +1360,7 @@ static int
 query_format(uint32_t format)
 {
     switch(format){
+#ifndef USE_JZ_IPU
     case IMGFMT_YV12:
 // it seems buggy (not hw accelerated), so just use YV12 instead!
 //    case IMGFMT_I420:
@@ -1369,6 +1370,7 @@ query_format(uint32_t format)
     case IMGFMT_YVYU:
         return VFCAP_CSP_SUPPORTED | VFCAP_CSP_SUPPORTED_BY_HW | VFCAP_OSD |
             VFCAP_HWSCALE_UP | VFCAP_HWSCALE_DOWN;
+#endif
     case IMGFMT_RGB15:
     case IMGFMT_BGR15:
     case IMGFMT_RGB16:

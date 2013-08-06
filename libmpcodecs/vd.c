@@ -177,6 +177,14 @@ int mpcodecs_config_vo(sh_video_t *sh, int w, int h,
         // user wants postprocess but no pp filter yet:
         sh->vfilter = vf = vf_open_filter(vf, "pp", NULL);
     }
+
+#ifdef USE_JZ_IPU
+    // when using the IPU, always use the scale filter as that is needed to
+    // convert the VPU's output format to something everything else can use.
+    if (strcmp(vf->info->name, "scale") && palette != -1)
+        sc = vf = vf_open_filter(vf, "scale", NULL);
+#endif
+
     // check if libvo and codec has common outfmt (no conversion):
   csp_again:
 
