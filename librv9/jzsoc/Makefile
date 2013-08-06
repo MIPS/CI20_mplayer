@@ -58,7 +58,7 @@ libs: $(P1_BIN)
 $(P1_BIN): $(P1_LIB)
 	$(COPY) -O binary $< 	$@
 $(P1_LIB): $(P1_OBJ) 
-	$(LD) -T ../../libjzcommon/jz4760e_p1.ld -static -o $@ $^ -lc
+	$(LD) -T ../../libjzcommon/jz4760e_p1.ld -static -o $@ $^ -L/usr/lib/mipsel-linux-gnu -L/usr/lib -lc
 #	$(LD) -T rv9_p1.ld -EL -nostdlib -o $@ $^
 
 $(P1_OBJ):%.o:%.mid.s

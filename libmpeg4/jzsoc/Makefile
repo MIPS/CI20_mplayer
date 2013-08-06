@@ -72,7 +72,7 @@ $(P1_ASM):%.s:%.c
 	$(CC) $(GCC_OPT) -S -o 	$@ 	$<
 
 $(P1_LIB): $(P1_OBJ) 
-	$(LD) -T mpeg4_p1.ld -static -o $@ $^ -lc
+	$(LD) -T mpeg4_p1.ld -static -o $@ $^ -L/usr/lib/mipsel-linux-gnu -L/usr/lib -lc
 $(P1_BIN): $(P1_LIB)
 	$(COPY) -O binary $< 	$@
 
@@ -86,7 +86,7 @@ $(P1_MS_ASM):%.s:%.c
 	$(CC) $(GCC_OPT) -S -o 	$@ 	$<
 
 $(P1_MS_LIB): $(P1_MS_OBJ) 
-	$(LD) -T mpeg4_p1.ld -static -o $@ $^ -lc
+	$(LD) -T mpeg4_p1.ld -static -o $@ $^ -L/usr/lib/mipsel-linux-gnu -L/usr/lib -lc
 $(P1_MS_BIN): $(P1_MS_LIB)
 	$(COPY) -O binary $< 	$@
 
