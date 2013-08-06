@@ -304,9 +304,12 @@ mad_fixed_t mad_f_mul_inline(mad_fixed_t x, mad_fixed_t y)
  * significant bit depends on OPT_ACCURACY via mad_f_scale64().
  */
 #  define MAD_F_MLX(hi, lo, x, y)  \
-    asm ("mult	%2,%3"  \
-	 : "=l" (lo), "=h" (hi)  \
-	 : "%r" (x), "r" (y))
+    asm ("mult %2, %3\n\t" \
+         "mfhi %0\n\t" \
+         "mflo %1\n\t" \
+         : "=r" (hi), "=r" (lo) \
+         : "r" (x), "r" (y) \
+         : "hi", "lo" )
 
 # if defined(HAVE_MADD_ASM)
 #  define MAD_F_MLA(hi, lo, x, y)  \
