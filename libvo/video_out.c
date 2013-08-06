@@ -77,7 +77,11 @@ int vo_pts=0; // for hw decoding
 float vo_fps=0;
 
 char *vo_subdevice = NULL;
+#ifdef USE_JZ_IPU
+int vo_directrendering=1;
+#else
 int vo_directrendering=0;
+#endif
 
 int vo_colorkey = 0x0000ff00; // default colorkey is green
                               // (0xff000000 means that colorkey has been disabled)
