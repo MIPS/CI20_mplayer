@@ -103,11 +103,11 @@ void mp_image_alloc_planes(mp_image_t *mpi) {
     }else{
 #ifdef JZ_LINUX_OS
 #ifdef JZC_TLB_OPT
-      size = w*h + w*ch + 1024;
+      size = mpi->bpp*w*(h+2)/8;
       data = jz4740_alloc_frame(256,size);
       SET_TLB();
       memset(data, 128,size);
-      mpi->planes[0]=data + 256;
+      mpi->planes[0]=data;
 #else
       data = jz4740_alloc_frame(256,mpi->bpp*w*(h+2)/8);
       mpi->planes[0]=data;
