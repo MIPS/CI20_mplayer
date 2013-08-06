@@ -2911,7 +2911,7 @@ int gui_no_filename=0;
 #ifdef JZC_HW_MEDIA
  VAE_map();
 #ifdef JZC_MXU_OPT
- S32I2M(xr16,7);
+ //S32I2M(xr16,7);
 #endif
 #endif
 #ifdef JZC_CRC_VER
