@@ -138,7 +138,7 @@ static int decode_buffering_period(H264Context *h){
 
     sps_id = get_ue_golomb_31(&s->gb);
     if(sps_id > 31 || !h->sps_buffers[sps_id]) {
-        av_log(h->s.avctx, AV_LOG_ERROR, "non-existing SPS %d referenced in buffering period\n", sps_id);
+        //av_log(h->s.avctx, AV_LOG_ERROR, "non-existing SPS %d referenced in buffering period\n", sps_id);
         return -1;
     }
     sps = h->sps_buffers[sps_id];

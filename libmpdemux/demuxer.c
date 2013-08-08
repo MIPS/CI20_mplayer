@@ -529,8 +529,8 @@ static void get_parser(sh_common_t *sh, AVCodecContext **avctx, AVCodecParserCon
     sh->avctx  = *avctx;
     sh->parser = *parser;
     if (!*parser)
-    {
-	//printf("allocate_parser is invalid\n");
+      {
+	printf("allocate_parser is invalid\n");
     }
 }
 
@@ -1123,14 +1123,6 @@ static demuxer_t *demux_open_stream(stream_t *stream, int file_format,
                sh_video->bih->biHeight, sh_video->bih->biBitCount,
                sh_video->fps, sh_video->i_bps * 0.008f,
                sh_video->i_bps / 1024.0f);
-
-	if (sh_video->bih->biWidth > 1280 || sh_video->bih->biHeight > 720) {
-	    av_log(NULL, AV_LOG_ERROR, "[ JZ4775 ] we can support up to 720P only!\n");
-	    return NULL;
-	} else if (sh_video->bih->biWidth == 0 || sh_video->bih->biHeight == 0) {
-	    av_log(NULL, AV_LOG_ERROR, "[ JZ4775 ] Detect no video resolution!\n");
-	}
-
     }
 #ifdef CONFIG_ASS
     if (ass_enabled && ass_library) {
@@ -1219,10 +1211,6 @@ demuxer_t *demux_open(stream_t *vs, int file_format, int audio_id,
         }
     }
 
-#if 0
-    mp_msg(NULL, NULL, "vs=%p, demuxer_type=%d, file_format=%d, demuxer_force=%d, audio_stream=%d, audio_id=%d,video_id=%d, sub_stream=%d, dvdsub_id=%d, filename=%s\n", 
-vs, demuxer_type, file_format, demuxer_force, audio_stream, audio_id, video_id, sub_stream, dvdsub_id, filename);
-#endif
     vd = demux_open_stream(vs, demuxer_type ? demuxer_type : file_format,
                            demuxer_force, audio_stream ? -2 : audio_id,
                            video_id, sub_stream ? -2 : dvdsub_id, filename);

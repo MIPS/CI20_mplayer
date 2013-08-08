@@ -1,0 +1,54 @@
+#
+# NOTE! Don't add files that are generated in specific
+# subdirectories here. Add them in the ".gitignore" file
+# in that subdirectory instead.
+#
+# NOTE! Please use 'git ls-files -i --exclude-standard'
+# command after changing this file, to see if there are
+# any tracked files which get ignored after the change.
+#
+# Normal rules
+#
+.*
+*.o
+*.o.*
+*.a
+*.s
+*.d
+*.mid
+*.lib
+*.bin
+
+#
+# Generated cfg, header, and other files
+#
+codec-cfg
+help_mp.h
+libavcodec/aac_tablegen
+libavcodec/aac_tables.h
+libavcodec/aacps_tablegen
+libavcodec/aacps_tables.h
+libavcodec/cbrt_tablegen
+libavcodec/cbrt_tables.h
+libavcodec/cos_tables.c
+libavcodec/costablegen
+libavcodec/dv_tablegen
+libavcodec/dv_tables.h
+libavcodec/mdct_tablegen
+libavcodec/mdct_tables.h
+libavcodec/motionpixels_tablegen
+libavcodec/motionpixels_tables.h
+libavcodec/mpegaudio_tablegen
+libavcodec/mpegaudio_tables.h
+libavcodec/pcm_tablegen
+libavcodec/pcm_tables.h
+libavcodec/qdm2_tablegen
+libavcodec/qdm2_tables.h
+libavcodec/sin_tables.c
+mplayer
+version.h
+
+#
+# git files that we don't want to ignore even it they are dot-files
+#
+!.gitignore
