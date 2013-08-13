@@ -899,7 +899,7 @@ mencoder$(EXESUF):
 	$(CC) -o $@ $^ $(EXTRALIBS)
 
 mplayer$(EXESUF):
-	$(CC) -Xlinker -T -Xlinker linux_mp.ld -o $@ $^ $(EXTRALIBS)
+	$(CC) -o $@ $^ $(EXTRALIBS)
 
 codec-cfg$(EXESUF): codec-cfg.c codec-cfg.h help_mp.h
 	$(HOST_CC) -O -DCODECS2HTML -I. -o $@ $<
