@@ -3169,10 +3169,13 @@ static av_cold int rv40_decode_init(AVCodecContext *avctx)
 	FILE *fp_text;
 	int len, *reserved_mem;
 	int *load_buf;	
-	fp_text = fopen("./rv9_p1.bin", "r+b");
+	fp_text = fopen("rv9_p1.bin", "r+b");
 	if (!fp_text){
-	    printf(" error while open rv9_p1.bin \n");
-	    exit_player_with_rc();
+            fp_text = fopen(MPLAYER_DATADIR "/rv9_p1.bin", "r+b");
+            if (!fp_text){
+              printf(" error while open rv9_p1.bin \n");
+              exit_player_with_rc();
+            }
 	}
 	load_buf = tmp_hm_buf;
 	len = fread(load_buf, 4, SPACE_HALF_MILLION_BYTE, fp_text);

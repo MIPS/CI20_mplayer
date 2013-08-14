@@ -615,8 +615,12 @@ av_cold int mpeg4_decode_init(AVCodecContext *avctx)
     int len, *reserved_mem;
     if (s->msmpeg4_version == 1 || s->msmpeg4_version == 2){
       fp_text = fopen("msmpeg4_p1.bin", "r+b");
+      if(!fp_text)
+        fp_text = fopen(MPLAYER_DATADIR "/msmpeg4_p1.bin", "r+b");
     }else{
       fp_text = fopen("mpeg4_p1.bin", "r+b");
+      if(!fp_text)
+        fp_text = fopen(MPLAYER_DATADIR "/mpeg4_p1.bin", "r+b");
     }
     if (!fp_text)
       printf(" error while open mpeg4_p1.bin \n");

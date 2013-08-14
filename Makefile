@@ -994,9 +994,15 @@ $(VIDIX_DEPS) $(VIDIX_OBJS): $(VIDIX_PCI_FILES)
 install: $(INSTALL_TARGETS-yes)
 
 install-dirs:
-	$(INSTALL) -d $(BINDIR) $(CONFDIR) $(LIBDIR)
+	$(INSTALL) -d $(BINDIR) $(CONFDIR) $(LIBDIR) $(DATADIR)
 
-install-%: %$(EXESUF) install-dirs
+install-mplayer: mplayer$(EXESUF) install-dirs
+	$(INSTALL) -m 755 $(INSTALLSTRIP) $< $(BINDIR)
+	$(INSTALL) -m 644 mpeg4_p1.bin $(DATADIR)
+	$(INSTALL) -m 644 msmpeg4_p1.bin $(DATADIR)
+	$(INSTALL) -m 644 rv9_p1.bin $(DATADIR)
+
+install-mencoder: mencoder$(EXESUF) install-dirs
 	$(INSTALL) -m 755 $(INSTALLSTRIP) $< $(BINDIR)
 
 install-gui: install-mplayer
