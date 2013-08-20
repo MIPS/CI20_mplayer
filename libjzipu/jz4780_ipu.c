@@ -113,10 +113,14 @@ static int closeIPU(void)
 	mIPU_inited = 0;
 	printf("closeIPU mIPUHandler=%p\n", mIPUHandler);
 
-	munmap(fb_vaddr, fbSize);
-	close(fbfd);
+
 	free(tmp_rgb_vaddr);
 	tmp_rgb_vaddr = NULL;
+
+	munmap(fb_vaddr, fbSize);
+
+	close(fbfd);
+	fbfd = -1;
 	
 	return 0;
 }
@@ -414,9 +418,13 @@ static int updateVideo(struct vf_instance *vf, mp_image_t *mpi, double pts)
 		initIPUDestBuffer(vf->posx, vf->posy, vf->priv->ctx->dstW, vf->priv->ctx->dstH);
 		initIPUSourceBuffer(vf, mpi, pts);
 #ifdef USE_JZ4780_DMMU
-		mapIPUSourceBuffer(vf, mpi);
+		if (mapIPUSourceBuffer(vf, mpi) < 0) {
+			return -1;
+		}
 #ifndef JZ4780_IPU_LCDC_OVERLAY
-		mapIPUDestBuffer(fb_var_info.xres, fb_var_info.yres, 4, fb_vaddr);
+		if (mapIPUDestBuffer(fb_var_info.xres, fb_var_info.yres, 4, fb_vaddr) < 0) {
+			return -1;
+		}
 #endif
 #endif
 		
@@ -437,7 +445,9 @@ static int updateVideo(struct vf_instance *vf, mp_image_t *mpi, double pts)
 		//printf("per frame initIPUSourceBuffer"); 
 		initIPUSourceBuffer(vf, mpi, pts);
 #ifdef USE_JZ4780_DMMU
-		mapIPUSourceBuffer(vf, mpi);
+		if (mapIPUSourceBuffer(vf, mpi) < 0) {
+			return -1;
+		}
 #endif
 	}
 
