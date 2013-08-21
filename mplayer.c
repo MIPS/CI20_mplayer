@@ -3330,6 +3330,9 @@ current_module = NULL;
 // ******************* Now, let's see the per-file stuff ********************
 
 play_next_file:
+#ifdef JZC_HW_MEDIA
+   reset_vpu();
+#endif
 
   // init global sub numbers
   mpctx->global_sub_size = 0;
