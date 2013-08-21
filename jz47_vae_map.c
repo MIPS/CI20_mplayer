@@ -93,6 +93,11 @@ volatile unsigned char *aux_base;
 	write_cpm_reg( read_cpm_reg() & (~CPM_VPU_SR) & (~CPM_VPU_STP) ); \
     }
 
+void reset_vpu(void)
+{
+	RST_VPU();
+}
+
 static void * safe_map(int fd, unsigned int offset, unsigned int size)
 {
     void * vaddr = mmap((void *)0, size, PROT_READ | PROT_WRITE, MAP_SHARED, vae_fd, offset);
