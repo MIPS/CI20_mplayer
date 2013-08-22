@@ -278,10 +278,10 @@ int dmmu_match_user_mem_tlb(void * vaddr, int size)
         return 1;
     volatile unsigned char * pc;
     pc = (unsigned char *)vaddr;
-    int pn = size/PAGE_SIZE;
+    int pn = ((size + (PAGE_SIZE-1)) & ~(PAGE_SIZE-1))/PAGE_SIZE;
     //ALOGD("pn=%d", pn);
     int pg;
-    for(pg=0; pg<(pn + 1); pg++ ) {
+    for(pg=0; pg<pn; pg++ ) {
         //ALOGD("pg=%d pc=%p", pg, pc);
         volatile unsigned char c = *( volatile unsigned char*)pc;
         pc += PAGE_SIZE;
