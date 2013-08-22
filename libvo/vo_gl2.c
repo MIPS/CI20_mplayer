@@ -805,18 +805,20 @@ draw_frame(uint8_t *src[])
 static int
 query_format(uint32_t format)
 {
+#ifndef USE_JZ_IPU
   if (use_yuv && mp_get_chroma_shift(format, NULL, NULL) &&
       (IMGFMT_IS_YUVP16_NE(format) || !IMGFMT_IS_YUVP16(format)))
     return VFCAP_CSP_SUPPORTED | VFCAP_CSP_SUPPORTED_BY_HW | VFCAP_OSD |
            VFCAP_HWSCALE_UP | VFCAP_HWSCALE_DOWN | VFCAP_ACCEPT_STRIDE;
+#endif
   switch(format) {
 #ifdef __APPLE__
     case IMGFMT_RGB32:
 #else
     case IMGFMT_RGB24:
     case IMGFMT_BGR24:
-//    case IMGFMT_RGB32:
-//    case IMGFMT_BGR32:
+    case IMGFMT_RGB32:
+    case IMGFMT_BGR32:
 #endif
         return VFCAP_CSP_SUPPORTED | VFCAP_CSP_SUPPORTED_BY_HW | VFCAP_OSD;
   }

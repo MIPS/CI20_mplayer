@@ -1074,9 +1074,11 @@ query_format(uint32_t format)
       caps |= VFCAP_OSD | VFCAP_EOSD | (scaled_osd ? 0 : VFCAP_EOSD_UNSCALED);
     if (format == IMGFMT_RGB24 || format == IMGFMT_RGBA)
         return caps;
+#ifndef USE_JZ_IPU
     if (use_yuv && mp_get_chroma_shift(format, NULL, NULL) &&
         (IMGFMT_IS_YUVP16_NE(format) || !IMGFMT_IS_YUVP16(format)))
         return caps;
+#endif
     // HACK, otherwise we get only b&w with some filters (e.g. -vf eq)
     // ideally MPlayer should be fixed instead not to use Y800 when it has the choice
     if (!use_yuv && (format == IMGFMT_Y8 || format == IMGFMT_Y800))
