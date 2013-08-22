@@ -142,7 +142,7 @@ static int unmapIPUSourceBuffer(struct vf_instance *vf, mp_image_t *mpi)
 
 static int mapIPUDestBuffer(struct vf_instance *vf, mp_image_t *dmpi)
 {
-	int size = vf->priv->w * vf->priv->h * (dmpi->bpp / 8);
+	int size = dmpi->stride[0] * vf->priv->h;
 
 	if ((dmmu_match_user_mem_tlb(dmpi->planes[0], size) == 0)
 		&& (dmmu_map_user_mem(dmpi->planes[0], size) == 0)) {
@@ -155,7 +155,7 @@ static int mapIPUDestBuffer(struct vf_instance *vf, mp_image_t *dmpi)
 
 static int unmapIPUDestBuffer(struct vf_instance *vf, mp_image_t *dmpi)
 {
-	int size = vf->priv->w * vf->priv->h * (dmpi->bpp / 8);
+	int size = dmpi->stride[0] * vf->priv->h;
 
 	if (dmmu_unmap_user_mem(dmpi->planes[0], size) == 0) {
 		return 0;
