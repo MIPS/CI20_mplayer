@@ -671,16 +671,20 @@ int ds_fill_buffer(demux_stream_t *ds)
         }
         if (demux->audio->packs >= MAX_PACKS
             || demux->audio->bytes >= MAX_PACK_BYTES) {
+#if 0
             mp_msg(MSGT_DEMUXER, MSGL_ERR, MSGTR_TooManyAudioInBuffer,
                    demux->audio->packs, demux->audio->bytes);
             mp_msg(MSGT_DEMUXER, MSGL_HINT, MSGTR_MaybeNI);
+#endif
             break;
         }
         if (demux->video->packs >= MAX_PACKS
             || demux->video->bytes >= MAX_PACK_BYTES) {
+#if 0
             mp_msg(MSGT_DEMUXER, MSGL_ERR, MSGTR_TooManyVideoInBuffer,
                    demux->video->packs, demux->video->bytes);
             mp_msg(MSGT_DEMUXER, MSGL_HINT, MSGTR_MaybeNI);
+#endif
             break;
         }
         if (!demux_fill_buffer(demux, ds)) {
@@ -874,16 +878,20 @@ double ds_get_next_pts(demux_stream_t *ds)
     while (!ds->first && (!ds->current || ds->buffer_pos)) {
         if (demux->audio->packs >= MAX_PACKS
             || demux->audio->bytes >= MAX_PACK_BYTES) {
+#if 0
             mp_msg(MSGT_DEMUXER, MSGL_ERR, MSGTR_TooManyAudioInBuffer,
                    demux->audio->packs, demux->audio->bytes);
             mp_msg(MSGT_DEMUXER, MSGL_HINT, MSGTR_MaybeNI);
+#endif
             return MP_NOPTS_VALUE;
         }
         if (demux->video->packs >= MAX_PACKS
             || demux->video->bytes >= MAX_PACK_BYTES) {
+#if 0
             mp_msg(MSGT_DEMUXER, MSGL_ERR, MSGTR_TooManyVideoInBuffer,
                    demux->video->packs, demux->video->bytes);
             mp_msg(MSGT_DEMUXER, MSGL_HINT, MSGTR_MaybeNI);
+#endif
             return MP_NOPTS_VALUE;
         }
         if (!demux_fill_buffer(demux, ds))
