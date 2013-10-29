@@ -285,7 +285,7 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 	x2d_Layer[0]->v_stride = vf->priv->w/2;
 #else
 	x2d_Layer[0]->y_stride = mpi->stride[0]; /* X2D recaculater YUV420_TILE stride_new = stride_orig*16 */
-	x2d_Layer[0]->u_stride = mpi->stride[1];
+	x2d_Layer[0]->v_stride = mpi->stride[1];
 	if (mpi->ipu_line) {
 		x2d_Layer[0]->v_stride = mpi->stride[1];
 	} else {

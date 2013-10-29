@@ -14,7 +14,8 @@ struct host_ipu_table
 	struct Ration2m ipu_ratio_table[IPU_LUT_LEN*IPU_LUT_LEN];
 };
 
-int jz4780_ipu_main(int argc, char *argv[])
+#if 0
+int main(int argc, char *argv[])
 {
 	unsigned int i, j, cnt;
 	float diff;
@@ -64,7 +65,7 @@ int jz4780_ipu_main(int argc, char *argv[])
 			cnt++;
 		}
 	}
-	printf("#include <android_jz_ipu.h>\n");
+	printf("#include "jz_ipu.h"\n");
 	printf("struct host_ipu_table hostiputable = {");
 	printf("{%d},{\n\t",cnt);	
 	int n = 0;
@@ -89,4 +90,5 @@ int jz4780_ipu_main(int argc, char *argv[])
 	printf("}};");
 	return (0);
 }
+#endif
 

@@ -20,28 +20,22 @@ extern "C" {
 #endif
 
 #if !defined(ANDROID)
-#define ALOGE(sss, aaa...) do {			\
-		printf(sss"\n", ##aaa);		\
-	} while (0)
-	
-#define ALOGD(sss, aaa...) do {			\
-		printf(sss"\n", ##aaa);		\
-	} while (0)
-
-#define ALOGV(sss, aaa...) do {			\
-		/*printf(sss"\n", ##aaa);*/	\
-	} while (0)
-
+#define ALOGE(sss, aaa...) do {         \
+        printf(sss"\n", ##aaa);     \
+    } while (0)
+    
+#define ALOGD(sss, aaa...) do {         \
+        printf(sss"\n", ##aaa);     \
+    } while (0)
+   
+#define ALOGV(sss, aaa...) do {         \
+        /*printf(sss"\n", ##aaa);*/ \
+    } while (0)
+   
 #endif
 
-#if !defined(ANDROID)
-#define IPU_FB0DEV_NAME "/dev/fb0"
-#define IPU_FB1DEV_NAME "/dev/fb1"
-#else
 #define IPU_FB0DEV_NAME "/dev/graphics/fb0"
 #define IPU_FB1DEV_NAME "/dev/graphics/fb1"
-#endif
-
 #define IPU0_DEVNAME    "/dev/ipu0"
 #define IPU1_DEVNAME    "/dev/ipu1"
 
@@ -302,6 +296,8 @@ struct ipu_image_info
 #define IOCTL_IPU_SET_BYPASS         _IO(JZIPU_IOC_MAGIC, 109)
 #define IOCTL_IPU_GET_BYPASS_STATE   _IOR(JZIPU_IOC_MAGIC, 110, int)
 #define IOCTL_IPU_CLR_BYPASS         _IO(JZIPU_IOC_MAGIC, 111)
+#define IOCTL_IPU_ENABLE_CLK         _IO(JZIPU_IOC_MAGIC, 112)
+#define IOCTL_IPU0_TO_BUF            _IO(JZIPU_IOC_MAGIC, 113)
 //#define IOCTL_GET_FREE_IPU       _IOR(JZIPU_IOC_MAGIC, 109, int)
 
 /* ioctl commands to control LCD controller registers */
