@@ -827,6 +827,7 @@ static int config(uint32_t width, uint32_t height, uint32_t d_width,
         fb_tty_fd = -1;
     }
 
+#if 0
     if (ioctl(fb_dev_fd, FBIOPUT_VSCREENINFO, &fb_vinfo))
         // Intel drivers fail if we request a transparency channel
         fb_vinfo.transp.length = fb_vinfo.transp.offset = 0;
@@ -837,6 +838,7 @@ static int config(uint32_t width, uint32_t height, uint32_t d_width,
         }
         return 1;
     }
+#endif
 
     fb_pixel_size = fb_vinfo.bits_per_pixel / 8;
     fb_bpp = fb_vinfo.bits_per_pixel;

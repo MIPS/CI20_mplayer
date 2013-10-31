@@ -871,10 +871,11 @@ int ipu_close(struct ipu_image_info ** ipu_img_p)
 	}
 
 	ipu->state = IPU_STATE_CLOSED;
-	free_img_info(ipu_img_p);
 
 	if (ipu->ipu_fd)
 		close(ipu->ipu_fd);
+
+	free_img_info(ipu_img_p);
 
 	ALOGV("Exit: %s", __FUNCTION__);
 	return ret;
