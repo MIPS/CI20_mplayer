@@ -20,6 +20,7 @@
 //#define JZ4770_IPU
 #define JZ4780_IPU
 //#define JZ4780_IPU_LCDC_OVERLAY
+//#define JZ4780_IPU_USE_HDMI_OVERLAY
 #define USE_JZ4780_DMMU		/* support virtual address */
 //#define JZ4780_X2D
 #endif

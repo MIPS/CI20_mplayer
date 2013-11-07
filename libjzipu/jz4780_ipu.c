@@ -89,7 +89,11 @@ static int openIPU(void)
 	if (mIPUHandler != NULL )
 		return 0;
 	
+#ifndef JZ4780_IPU_USE_HDMI_OVERLAY
 	if (ipu_open(&mIPUHandler) < 0) {
+#else
+	if (open_ipu1(&mIPUHandler) < 0) {
+#endif
 		printf("ERROR: ipu_open() failed mIPUHandler=%p\n", mIPUHandler);
 		ipu_close(&mIPUHandler);
 		mIPUHandler = NULL;
