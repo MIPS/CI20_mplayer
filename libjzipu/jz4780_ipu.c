@@ -492,10 +492,14 @@ int jz4780_put_image (struct vf_instance *vf, mp_image_t *mpi, double pts)
 	return 1;
 }
 
-
 void jz4780_ipu_exit(void)
 {
-
+#ifdef JZ4780_IPU_LCDC_OVERLAY
+	if (setFGAlpha(0, 1, 0, 0xff) < 0) {
+		printf("recover alpha failed!\n");
+		return -1;
+	}
+#endif
 	closeIPU();
 
 	/* close fb */
