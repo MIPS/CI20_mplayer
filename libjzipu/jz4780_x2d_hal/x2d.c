@@ -167,20 +167,24 @@ int x2d_open(struct x2d_hal_info **x2d)
 												 sizeof(struct jz_x2d_config), sizeof(char));
 		if (!x2d_info)
 			err_sys("alloc struct x2d_hal_info error");
+		memset(x2d_info, 0, sizeof(struct x2d_hal_info) + sizeof(struct jz_x2d_config));
 		x2d_info->x2d_deliver_data = (void *)((struct x2d_hal_info *)x2d_info + 1);
 
 		x2d_info->glb_info = (struct x2d_glb_info *)calloc(sizeof(struct x2d_glb_info),
 														   sizeof(char));
 		if (!x2d_info->glb_info)
 			err_sys("alloc struct x2d_glb_info error");
+		memset(x2d_info->glb_info, 0, sizeof(struct x2d_glb_info));
 		x2d_info->dst_info = (struct x2d_dst_info *)calloc(sizeof(struct x2d_dst_info),
 														   sizeof(char));
 		if (!x2d_info->dst_info)
 			err_sys("alloc struct x2d_dst_info error");
+		memset(x2d_info->dst_info, 0, sizeof(struct x2d_dst_info));
 		x2d_info->layer = (struct src_layer (*)[4])calloc(sizeof(struct src_layer)*4,
 														  sizeof(char));
 		if (!x2d_info->layer)
 			err_sys("alloc struct src_layer error");
+		memset(x2d_info->layer, 0, sizeof(struct src_layer) * 4);
 
 		*x2d = x2d_info;
 	}
@@ -367,7 +371,8 @@ int x2d_src_init(struct x2d_hal_info *x2d)
 {
 	int i = 0;
 	struct x2d_glb_info *glb_info = NULL;
-	struct src_layer (*layer)[4] = NULL;
+	//struct src_layer (*layer)[4] = NULL;
+	struct src_layer *layer = NULL;
 	struct jz_x2d_config *x2d_cfg = NULL;
 
 	if (!x2d)
@@ -383,7 +388,8 @@ int x2d_src_init(struct x2d_hal_info *x2d)
 
 	/* deliver src data */
 	for (i = 0; i < x2d_cfg->layer_num; i++) {
-		memcpy((char *)&x2d_cfg->lay[i], (char *)layer[i], sizeof(struct src_layer));
+		//memcpy((char *)&x2d_cfg->lay[i], (char *)&layer[i], sizeof(struct src_layer));
+		x2d_cfg->lay[i] = layer[i];
 		int *fmt = &x2d_cfg->lay[i].format;
 		int *argb_order = &x2d_cfg->lay[i].argb_order;
 
@@ -393,12 +399,12 @@ int x2d_src_init(struct x2d_hal_info *x2d)
 
 		transform_deliver_rot(&x2d_cfg->lay[i]);
 
+		cal_deliver_size(&x2d_cfg->lay[i]);
 		transform_tox2d_format(fmt, argb_order);
 
 		if (X2D_INFORMAT_NOTSUPPORT == *fmt)
 			err_ret("i: %d input format error!", i);
 
-		cal_deliver_size(&x2d_cfg->lay[i]);
 	}
 
 	return 0;

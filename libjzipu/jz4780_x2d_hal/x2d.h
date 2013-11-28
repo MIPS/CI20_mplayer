@@ -154,7 +154,8 @@ struct x2d_dst_info {
 struct x2d_hal_info {
 	struct x2d_glb_info *glb_info;
 	struct x2d_dst_info *dst_info;
-	struct src_layer (*layer)[4];
+	//struct src_layer (*layer)[4];
+	struct src_layer *layer;
 	void *x2d_deliver_data;
 };
 

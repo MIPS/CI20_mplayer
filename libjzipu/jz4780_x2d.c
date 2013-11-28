@@ -26,7 +26,8 @@ void* tmp_rgb_vaddr;	/* default size: 0x800000 MB */
 static unsigned int x2d_TlbBasePhys = 0;
 static struct dmmu_mem_info x2d_SrcMemInfo, x2d_DstMemInfo;
 struct x2d_hal_info *x2d;
-struct src_layer (*x2d_Layer)[4];
+//struct src_layer (*x2d_Layer)[4];
+struct src_layer *x2d_Layer;
 struct x2d_glb_info *x2d_GlbInfo;
 struct x2d_dst_info *x2d_DstInfo;
 
@@ -245,6 +246,10 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 	dstRect_h = fb_var_info.yres;
 #endif
 	int ret = 0;
+	int dstW = vf->priv->ctx->dstW, dstH = vf->priv->ctx->dstH;
+	//int dstW = vf->priv->w, dstH = vf->priv->h;
+	int posx = vf->posx, posy = vf->posy;
+	int bytes_per_pixel;
 
 	/* debug set colorbar */
 	//memset (mpi->planes[0], 0, vf->priv->w*vf->priv->h);
@@ -262,57 +267,81 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 	LOG_DBG("x2d_init x2d src. line: %d", __LINE__);
 	x2d_GlbInfo->layer_num = 1;
 	if (mpi->ipu_line) {
-		x2d_Layer[0]->format = HAL_PIXEL_FORMAT_JZ_YUV_420_B;
-		x2d_Layer[0]->in_width = c->srcW;
-		x2d_Layer[0]->in_height = c->srcH;
+		x2d_Layer[0].format = HAL_PIXEL_FORMAT_JZ_YUV_420_B;
+		x2d_Layer[0].in_width = c->srcW;
+		x2d_Layer[0].in_height = c->srcH;
 	} else {
-		x2d_Layer[0]->format = HAL_PIXEL_FORMAT_JZ_YUV_420_P;
-		x2d_Layer[0]->in_width = c->srcW;
-		x2d_Layer[0]->in_height = c->srcH & ~(0xf - 0x1);
+		x2d_Layer[0].format = HAL_PIXEL_FORMAT_JZ_YUV_420_P;
+		x2d_Layer[0].in_width = c->srcW;
+		x2d_Layer[0].in_height = c->srcH & ~(0xf - 0x1);
 	}
-	x2d_Layer[0]->out_width = fb_var_info.xres;
-	x2d_Layer[0]->out_height = fb_var_info.yres;
 
-	x2d_Layer[0]->addr = mpi->planes[0];
-	x2d_Layer[0]->u_addr = mpi->planes[1];
+	x2d_Layer[0].addr = mpi->planes[0];
+	x2d_Layer[0].u_addr = mpi->planes[1];
 	if (mpi->ipu_line) {
-		x2d_Layer[0]->v_addr = mpi->planes[1];
+		x2d_Layer[0].v_addr = mpi->planes[1];
 	} else {
-		x2d_Layer[0]->v_addr = mpi->planes[2];
+		x2d_Layer[0].v_addr = mpi->planes[2];
 	}
-#if 0
-	x2d_Layer[0]->y_stride = vf->priv->w; /* X2D recaculater YUV420_TILE stride_new = stride_orig*16 */
-	x2d_Layer[0]->v_stride = vf->priv->w/2;
-#else
-	x2d_Layer[0]->y_stride = mpi->stride[0]; /* X2D recaculater YUV420_TILE stride_new = stride_orig*16 */
-	x2d_Layer[0]->v_stride = mpi->stride[1];
+
 	if (mpi->ipu_line) {
-		x2d_Layer[0]->v_stride = mpi->stride[1];
+		//x2d_Layer[0].y_stride = vf->priv->w; /* X2D recaculater YUV420_TILE stride_new = stride_orig*16 */
+		//x2d_Layer[0].v_stride = vf->priv->w/2;
+		x2d_Layer[0].y_stride = mpi->stride[0]/16; /* X2D recaculater YUV420_TILE stride_new = stride_orig*16 */
+		x2d_Layer[0].v_stride = mpi->stride[1]/16;
 	} else {
-		x2d_Layer[0]->v_stride = mpi->stride[2];
+		x2d_Layer[0].y_stride = mpi->stride[0]; /* X2D recaculater YUV420_TILE stride_new = stride_orig*16 */
+		x2d_Layer[0].v_stride = mpi->stride[1];
 	}
-#endif
 	
-	x2d_Layer[0]->glb_alpha_en = 1;
-	x2d_Layer[0]->global_alpha_val = 0xff;
-	x2d_Layer[0]->preRGB_en = 0;
-	x2d_Layer[0]->out_w_offset = 0;
-	x2d_Layer[0]->out_h_offset = 0;
-	x2d_Layer[0]->mask_en = 0;
-	x2d_Layer[0]->msk_val = 0xffff0000;
+	x2d_Layer[0].glb_alpha_en = 1;
+	x2d_Layer[0].global_alpha_val = 0xff;
+	x2d_Layer[0].preRGB_en = 0;
+	x2d_Layer[0].out_w_offset = 0;
+	x2d_Layer[0].out_h_offset = 0;
+	x2d_Layer[0].mask_en = 0;
+	x2d_Layer[0].msk_val = 0xffff0000;
 
-	if (x2d_src_init(x2d) < 0)
-		printf("x2d src hal x2d_init failed");
 
 	/* x2d_init x2d dst */
 	LOG_DBG("x2d_init x2d dst. line: %d", __LINE__);
 	x2d_GlbInfo->tlb_base = x2d_TlbBasePhys;
-	x2d_DstInfo->dst_address = fb_vaddr;
 	x2d_DstInfo->dst_format = HAL_PIXEL_FORMAT_RGBX_8888;
 	//x2d_DstInfo->dst_format = HAL_PIXEL_FORMAT_BGRA_8888;
-	x2d_DstInfo->dst_width = fb_var_info.xres;
-	x2d_DstInfo->dst_height = fb_var_info.yres;
+
+	dstW = dstW > fb_var_info.xres ? fb_var_info.xres : dstW;
+	dstH = dstH > fb_var_info.yres ? fb_var_info.yres : dstH;
+	dstW = dstW ? dstW : fb_var_info.xres;
+	dstH = dstH ? dstH : fb_var_info.yres;
+
+	if (posx >= 0) {
+		posx = posx % fb_var_info.xres;
+	} else {
+		posx = (fb_var_info.xres - dstW) / 2;
+	}
+
+	if (posy >= 0) {
+		posy = posy % fb_var_info.yres;
+	} else {
+		posy = (fb_var_info.yres - dstH) / 2;
+	}
+
+	if (dstW + posx > fb_var_info.xres) {
+		dstW = fb_var_info.xres - posx;
+	}
+
+	if (dstH + posy > fb_var_info.yres) {
+		dstH = fb_var_info.yres - posy;
+	}
+
+	x2d_Layer[0].out_width = x2d_DstInfo->dst_width = (dstW >> 3) << 3;
+	x2d_Layer[0].out_height = x2d_DstInfo->dst_height = (dstH >> 3) << 3;
+	bytes_per_pixel = fb_fix_info.line_length / fb_var_info.xres;
+	x2d_DstInfo->dst_address = fb_vaddr + posy * fb_fix_info.line_length + posx * bytes_per_pixel;
+	x2d_DstInfo->dst_address = ((x2d_DstInfo->dst_address >> 3) << 3);
+
 	x2d_DstInfo->dst_stride = fb_fix_info.line_length;
+
 	x2d_DstInfo->dst_alpha_val = 0xff;
 	x2d_DstInfo->dst_mask_val = 0;
 	x2d_DstInfo->dst_bcground = 0x00000000;
@@ -321,6 +350,8 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 	x2d_DstInfo->dst_glb_alpha_en = 1;
 	x2d_DstInfo->dst_mask_en = 0;
 
+	if (x2d_src_init(x2d) < 0)
+		printf("x2d src hal x2d_init failed");
 
 	if (x2d_dst_init(x2d) < 0)
 		printf("x2d dst x2d_init failed");
