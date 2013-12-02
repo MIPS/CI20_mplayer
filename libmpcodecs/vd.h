@@ -45,6 +45,7 @@ extern int opt_screen_size_x;
 extern int opt_screen_size_y;
 extern int opt_screen_pos_x;
 extern int opt_screen_pos_y;
+extern int opt_screen_qrotate;
 extern int softzoom;
 extern int vd_use_slices;
 extern int vidmode;

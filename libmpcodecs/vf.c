@@ -698,6 +698,7 @@ int vf_next_config(struct vf_instance *vf,
     }
     vf->next->w = width; vf->next->h = height;
     vf->next->posx= vf->posx; vf->next->posy = vf->posy;
+    vf->next->qrot= vf->qrot;
     return vf_config_wrapper(vf->next,width,height,d_width,d_height,voflags,outfmt);
 }
 

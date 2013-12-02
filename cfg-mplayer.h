@@ -149,6 +149,7 @@ const m_option_t mplayer_opts[]={
     {"y", &opt_screen_size_y, CONF_TYPE_INT, CONF_RANGE, 0, 4096, NULL},
     {"posx", &opt_screen_pos_x, CONF_TYPE_INT, CONF_RANGE, 0, 4096, NULL},
     {"posy", &opt_screen_pos_y, CONF_TYPE_INT, CONF_RANGE, 0, 4096, NULL},
+    {"qrotate", &opt_screen_qrotate, CONF_TYPE_INT, CONF_RANGE, 0, 4096, NULL},
     // set screen dimensions (when not detectable or virtual!=visible)
     {"screenw", &vo_screenwidth, CONF_TYPE_INT, CONF_RANGE|CONF_OLD, 0, 4096, NULL},
     {"screenh", &vo_screenheight, CONF_TYPE_INT, CONF_RANGE|CONF_OLD, 0, 4096, NULL},

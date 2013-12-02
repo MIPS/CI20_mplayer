@@ -20,6 +20,11 @@
 #define JZFB_GET_BUFFER         _IOR('F', 0x120, int)
 #define NOGPU_PAN               _IOR('F', 0x311, int)
 
+/*  Support for multiple buffer, can be switched. */
+#define JZFB_ACQUIRE_BUFFER		_IOR('F', 0x441, int)	//acquire new buffer and to display
+#define JZFB_RELEASE_BUFFER		_IOR('F', 0x442, int)	//release the acquire buffer
+#define JZFB_CHANGE_BUFFER		_IOR('F', 0x443, int)	//change the acquire buffer*/
+
 struct vf_priv_s {
     int w,h;
     int v_chr_drop;
@@ -33,6 +38,18 @@ struct vf_priv_s {
     int accurate_rnd;
 };
 
+enum {
+	/* flip source image horizontally (around the vertical axis) */
+	HAL_TRANSFORM_FLIP_H    = 0x01,
+	/* flip source image vertically (around the horizontal axis)*/
+	HAL_TRANSFORM_FLIP_V    = 0x02,
+	/* rotate source image 90 degrees clockwise */
+	HAL_TRANSFORM_ROT_90    = 0x04,
+	/* rotate source image 180 degrees */
+	HAL_TRANSFORM_ROT_180   = 0x03,
+	/* rotate source image 270 degrees clockwise */
+	HAL_TRANSFORM_ROT_270   = 0x07,
+};
 enum {
     HAL_PIXEL_FORMAT_RGBA_8888          = 1,
     HAL_PIXEL_FORMAT_RGBX_8888          = 2,

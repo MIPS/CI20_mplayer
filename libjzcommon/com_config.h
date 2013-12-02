@@ -37,7 +37,10 @@
 #ifdef USE_IPU_THROUGH_MODE
 #define USE_FBUF_NUM 6
 #endif
+
+#ifdef JZ4780_IPU
 #define  RECOVE_FB_ORG
+#endif
 
 //#define JZC_PMON_P0
 //#define STA_CCLK
