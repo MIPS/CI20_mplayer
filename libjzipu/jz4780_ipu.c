@@ -253,7 +253,7 @@ static int initIPUSourceBuffer(struct vf_instance *vf, mp_image_t *mpi, double p
 	}
 	src = &mIPUHandler->src_info;
 	srcBuf = &mIPUHandler->src_info.srcBuf;
-	memset(src, 0, sizeof(struct source_data_info));
+//	memset(src, 0, sizeof(struct source_data_info));
 
 	if (mpi->ipu_line) {
 		src->fmt = HAL_PIXEL_FORMAT_JZ_YUV_420_B;
@@ -353,9 +353,8 @@ static int initIPUDestBuffer(int posX, int posY, int dstW, int dstH)
 	dst = &mIPUHandler->dst_info;
 	dstBuf = &dst->dstBuf;
 
-	memset(dst, 0, sizeof(struct dest_data_info));
-	memset(dstBuf, 0, sizeof(struct ipu_data_buffer));
-
+	//memset(dst, 0, sizeof(struct dest_data_info));
+	//memset(dstBuf, 0, sizeof(struct ipu_data_buffer));
 #ifdef JZ4780_IPU_LCDC_OVERLAY
 	dst->dst_mode = IPU_OUTPUT_TO_LCD_FG1;
 	dst->dst_mode |= IPU_DST_USE_COLOR_KEY;
@@ -371,6 +370,7 @@ static int initIPUDestBuffer(int posX, int posY, int dstW, int dstH)
 	dstH = dstH > fb_var_info.yres ? fb_var_info.yres : dstH;
 	dst->width= dstW ? dstW : fb_var_info.xres;
 	dst->height = dstH ? dstH : fb_var_info.yres;
+#if 0
 	if ((posX >= 0) && (posY >= 0)) {
 		dst->left = posX % fb_var_info.xres;
 		dst->top = posY % fb_var_info.yres;
@@ -378,6 +378,18 @@ static int initIPUDestBuffer(int posX, int posY, int dstW, int dstH)
 		dst->left = (fb_var_info.xres - dst->width) / 2;
 		dst->top = (fb_var_info.yres - dst->height) / 2;
 	}
+#else
+	if (posX >= 0) 
+		dst->left = posX % fb_var_info.xres;
+	else 
+		dst->left = (fb_var_info.xres - dst->width) / 2;
+
+	if (posY >= 0) 
+		dst->top = posY % fb_var_info.yres;
+	else 
+		dst->top = (fb_var_info.yres - dst->height) / 2;
+
+#endif
 	if (dst->width + posX > fb_var_info.xres) {
 		dst->width = fb_var_info.xres - dst->left;
 	}
@@ -409,22 +421,22 @@ static int initIPUDestBuffer(int posX, int posY, int dstW, int dstH)
 
 static int updateVideo(struct vf_instance *vf, mp_image_t *mpi, double pts)
 {
-	//printf("vf->priv->ctx->srcW = %d, vf->priv->ctx->srcH = %d\n", vf->priv->ctx->srcW, vf->priv->ctx->srcH);
 	if (mIPUHandler == NULL) {
 		return -1;
 	}
-	// if src buffer size changed, reset(re_init) ipu
-	if ((mIPUHandler->src_info.width != vf->priv->ctx->srcW) || ( mIPUHandler->src_info.height != vf->priv->ctx->srcH)) {
-		mIPU_inited = 0;
-	}
 
-	if (mIPU_inited == 0) {
-		initIPUDestBuffer(vf->posx, vf->posy, vf->priv->ctx->dstW, vf->priv->ctx->dstH);
-		initIPUSourceBuffer(vf, mpi, pts);
+	initIPUDestBuffer(vf->posx, vf->posy, vf->priv->w, vf->priv->h);
+	initIPUSourceBuffer(vf, mpi, pts);
 #ifdef USE_JZ4780_DMMU
-		if (mapIPUSourceBuffer(vf, mpi) < 0) {
-			return -1;
-		}
+	if (mapIPUSourceBuffer(vf, mpi) < 0) {
+		return -1;
+	}
+#endif
+	if (mIPU_inited == 0) {
+#ifdef USE_JZ4780_DMMU
+	//	if (mapIPUSourceBuffer(vf, mpi) < 0) {
+	//		return -1;
+	//	}
 #ifndef JZ4780_IPU_LCDC_OVERLAY
 		if (mapIPUDestBuffer(fb_var_info.xres, fb_var_info.yres, 4, fb_vaddr) < 0) {
 			return -1;
@@ -438,21 +450,12 @@ static int updateVideo(struct vf_instance *vf, mp_image_t *mpi, double pts)
 			return -1;
 		}
 #endif
-		//printf("ipu_init");
-		if (ipu_init(mIPUHandler) < 0) { 
-			//printf("%s: ipu_init() failed mIPUHandler=%p",__FUNCTION__, mIPUHandler);
-			return -1;
-		} else {
-			mIPU_inited = 1;
-		}
-	} else {
-		//printf("per frame initIPUSourceBuffer"); 
-		initIPUSourceBuffer(vf, mpi, pts);
-#ifdef USE_JZ4780_DMMU
-		if (mapIPUSourceBuffer(vf, mpi) < 0) {
-			return -1;
-		}
-#endif
+		mIPU_inited = 1;
+	} 
+	//printf("ipu_init");
+	if (ipu_init(mIPUHandler) < 0) { 
+		//printf("%s: ipu_init() failed mIPUHandler=%p",__FUNCTION__, mIPUHandler);
+		return -1;
 	}
 
 	//printf("ipu_postBuffer");
@@ -472,7 +475,6 @@ static int updateVideo(struct vf_instance *vf, mp_image_t *mpi, double pts)
 
 int jz4780_put_image (struct vf_instance *vf, mp_image_t *mpi, double pts)
 {
-	
 	if (mpi->ipu_line)
 	{
 		vf->priv->ctx->srcH &= ~(0xf - 0x1);
@@ -486,7 +488,6 @@ int jz4780_put_image (struct vf_instance *vf, mp_image_t *mpi, double pts)
 	if (openIPU()) {
 		return 0;
 	}
-
 	updateVideo(vf, mpi, pts);
 
 	return 1;

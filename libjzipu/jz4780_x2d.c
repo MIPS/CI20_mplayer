@@ -293,8 +293,8 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 	dstRect_h = fb_var_info.yres;
 #endif
 	int ret = 0;
-	int dstW = vf->priv->ctx->dstW, dstH = vf->priv->ctx->dstH;
-	//int dstW = vf->priv->w, dstH = vf->priv->h;
+	//int dstW = vf->priv->ctx->dstW, dstH = vf->priv->ctx->dstH;
+	int dstW = vf->priv->w, dstH = vf->priv->h;
 	int posx = vf->posx, posy = vf->posy;
 	int bytes_per_pixel;
 

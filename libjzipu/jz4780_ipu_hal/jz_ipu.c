@@ -472,7 +472,6 @@ static int jz47_put_image(struct ipu_image_info *ipu_img, struct ipu_data_buffer
 	struct ipu_native_info * ipu = (struct ipu_native_info*)ipu_img->native_data;
 	struct ipu_img_param * img = &ipu->img;
 
-
 	if (data_buf) {
 		img->y_buf_p = WORDALIGN(data_buf->y_buf_phys);
 		img->u_buf_p = WORDALIGN(data_buf->u_buf_phys);
@@ -525,6 +524,7 @@ int alloc_img_info(struct ipu_image_info **ipu_img_p)
 			ALOGE("ipu_open() no mem.\n");
 			return -1;
 		}
+		memset(ipu_img, 0, (sizeof(struct ipu_image_info) + sizeof(struct ipu_native_info)));
 		ipu_img->native_data = (void*)((struct ipu_image_info *)ipu_img + 1);
 		*ipu_img_p = ipu_img;
 	}

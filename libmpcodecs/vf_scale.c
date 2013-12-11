@@ -454,57 +454,75 @@ static int control(struct vf_instance *vf, int request, void* data){
     int r;
     int brightness, contrast, saturation, srcRange, dstRange;
     vf_equalizer_t *eq;
+	int param = 0;
+	int val = 0;
 
   if(vf->priv->ctx)
     switch(request){
-    case VFCTRL_GET_EQUALIZER:
-	r= sws_getColorspaceDetails(vf->priv->ctx, &inv_table, &srcRange, &table, &dstRange, &brightness, &contrast, &saturation);
-	if(r<0) break;
+		case VFCTRL_CHANGE_RECTANGLE:
+			param=((int *)data)[0];
+			val=((int *)data)[1];
+		//	mp_msg(NULL,NULL,"param=%d,val=%d\n",param,val);
+			if(param==0)
+					vf->priv->w = val;
+			else if(param==1)
+					vf->priv->h = val;
+			else if(param==2)
+					vf->posx = val;
+			else if(param==3)
+					vf->posy = val;
+			else
+					mp_msg(MSGT_VFILTER,MSGL_FATAL,"Unknown param %d \n", param);
+			break;
+			
+		case VFCTRL_GET_EQUALIZER:
+			r= sws_getColorspaceDetails(vf->priv->ctx, &inv_table, &srcRange, &table, &dstRange, &brightness, &contrast, &saturation);
+			if(r<0) break;
 
-	eq = data;
-	if (!strcmp(eq->item,"brightness")) {
-		eq->value =  ((brightness*100) + (1<<15))>>16;
-	}
-	else if (!strcmp(eq->item,"contrast")) {
-		eq->value = (((contrast  *100) + (1<<15))>>16) - 100;
-	}
-	else if (!strcmp(eq->item,"saturation")) {
-		eq->value = (((saturation*100) + (1<<15))>>16) - 100;
-	}
-	else
-		break;
-	return CONTROL_TRUE;
-    case VFCTRL_SET_EQUALIZER:
-	r= sws_getColorspaceDetails(vf->priv->ctx, &inv_table, &srcRange, &table, &dstRange, &brightness, &contrast, &saturation);
-	if(r<0) break;
-//printf("set %f %f %f\n", brightness/(float)(1<<16), contrast/(float)(1<<16), saturation/(float)(1<<16));
-	eq = data;
+			eq = data;
+			if (!strcmp(eq->item,"brightness")) {
+				eq->value =  ((brightness*100) + (1<<15))>>16;
+			}
+			else if (!strcmp(eq->item,"contrast")) {
+				eq->value = (((contrast  *100) + (1<<15))>>16) - 100;
+			}
+			else if (!strcmp(eq->item,"saturation")) {
+				eq->value = (((saturation*100) + (1<<15))>>16) - 100;
+			}
+			else
+				break;
+			return CONTROL_TRUE;
+		case VFCTRL_SET_EQUALIZER:
+			r= sws_getColorspaceDetails(vf->priv->ctx, &inv_table, &srcRange, &table, &dstRange, &brightness, &contrast, &saturation);
+			if(r<0) break;
+			//printf("set %f %f %f\n", brightness/(float)(1<<16), contrast/(float)(1<<16), saturation/(float)(1<<16));
+			eq = data;
 
-	if (!strcmp(eq->item,"brightness")) {
-		brightness = (( eq->value     <<16) + 50)/100;
-	}
-	else if (!strcmp(eq->item,"contrast")) {
-		contrast   = (((eq->value+100)<<16) + 50)/100;
-	}
-	else if (!strcmp(eq->item,"saturation")) {
-		saturation = (((eq->value+100)<<16) + 50)/100;
-	}
-	else
-		break;
+			if (!strcmp(eq->item,"brightness")) {
+				brightness = (( eq->value     <<16) + 50)/100;
+			}
+			else if (!strcmp(eq->item,"contrast")) {
+				contrast   = (((eq->value+100)<<16) + 50)/100;
+			}
+			else if (!strcmp(eq->item,"saturation")) {
+				saturation = (((eq->value+100)<<16) + 50)/100;
+			}
+			else
+				break;
 
-	r= sws_setColorspaceDetails(vf->priv->ctx, inv_table, srcRange, table, dstRange, brightness, contrast, saturation);
-	if(r<0) break;
-	if(vf->priv->ctx2){
-            r= sws_setColorspaceDetails(vf->priv->ctx2, inv_table, srcRange, table, dstRange, brightness, contrast, saturation);
-            if(r<0) break;
-        }
+			r= sws_setColorspaceDetails(vf->priv->ctx, inv_table, srcRange, table, dstRange, brightness, contrast, saturation);
+			if(r<0) break;
+			if(vf->priv->ctx2){
+				r= sws_setColorspaceDetails(vf->priv->ctx2, inv_table, srcRange, table, dstRange, brightness, contrast, saturation);
+				if(r<0) break;
+			}
 
-	return CONTROL_TRUE;
-    default:
-	break;
-    }
+			return CONTROL_TRUE;
+		default:
+			break;
+	}
 
-    return vf_next_control(vf,request,data);
+  return vf_next_control(vf,request,data);
 }
 
 //===========================================================================//
