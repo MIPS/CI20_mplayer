@@ -3095,11 +3095,14 @@ int run_command(MPContext *mpctx, mp_cmd_t *cmd)
         case MP_CMD_SCREENSHOT:
             if (vo_config_count) {
                 mp_msg(MSGT_CPLAYER, MSGL_INFO, "sending VFCTRL_SCREENSHOT!\n");
+				jpegenc_flags =1;
+#if 0
                 if (CONTROL_OK !=
                     ((vf_instance_t *) sh_video->vfilter)->
                     control(sh_video->vfilter, VFCTRL_SCREENSHOT,
                             &cmd->args[0].v.i))
                     mp_msg(MSGT_CPLAYER, MSGL_INFO, "failed (forgot -vf screenshot?)\n");
+#endif
             }
             break;
 

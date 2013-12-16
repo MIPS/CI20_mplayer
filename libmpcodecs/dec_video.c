@@ -474,12 +474,247 @@ void *decode_video(sh_video_t *sh_video, unsigned char *start, int in_size,
     return mpi;
 }
 
+extern volatile unsigned char *jpeg_base;
+extern volatile unsigned char *gp0_base;
+extern volatile unsigned char *vpu_base;
+extern volatile unsigned char *cpm_base;
+#include "../libjzcommon/jzasm.h"
+#include "jzm_jpeg_enc.h"
+#include "jzm_jpeg_enc.c"
+#include "genhead.c"
+static int frameno = 0;
+int jpegenc_flags = 0;
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+static int fexists(char *fname)
+{
+    struct stat dummy;
+    if (stat(fname, &dummy) == 0) return 1;
+    else return 0;
+}
+
+#define CPM_VPU_SWRST    (cpm_base + 0xC4)
+#define CPM_VPU_SR     	 (0x1<<31)
+#define CPM_VPU_STP    	 (0x1<<30)
+#define CPM_VPU_ACK    	 (0x1<<29)
+
+#define write_cpm_reg(a)    (*(volatile unsigned int *)(CPM_VPU_SWRST) = a)
+#define read_cpm_reg()      (*(volatile unsigned int *)(CPM_VPU_SWRST))
+
+#define RST_VPU()							\
+    {									\
+	write_cpm_reg(read_cpm_reg() | CPM_VPU_STP);			\
+	while( !(read_cpm_reg() & CPM_VPU_ACK) );			\
+	write_cpm_reg( (read_cpm_reg() | CPM_VPU_SR) & (~CPM_VPU_STP) ); \
+	write_cpm_reg( read_cpm_reg() & (~CPM_VPU_SR) & (~CPM_VPU_STP) ); \
+    }
+
+int genyuv(mp_image_t *mpi, int width, int height, unsigned char* ref_y,unsigned char* ref_c)
+{
+    unsigned char *pxly, *pxlu, *pxlv;
+    int mbx, mby, i, j;
+  
+    int align_w = (width + 15) / 16;
+    int align_h = (height + 15) / 16;
+
+    unsigned char* y_ptr = ref_y;
+    unsigned char* c_ptr = ref_c;
+
+    for(mby=0; mby<align_h; mby++){
+	for(mbx=0; mbx<align_w; mbx++){
+	    pxly = mpi->planes[0] + mby*16*mpi->stride[0] + mbx*16;
+	    for(j=0; j<16; j++){
+		for(i=0; i<16; i++){
+		    *y_ptr = pxly[i];
+		    y_ptr++;
+		}
+		pxly += mpi->stride[0];
+	    }
+	    pxlu = mpi->planes[1] + mby*8*mpi->stride[1] + mbx*8;
+	    pxlv = mpi->planes[2] + mby*8*mpi->stride[2] + mbx*8;
+	    for(j=0; j<8; j++){
+		for(i=0; i<8; i++){
+		    *c_ptr = pxlu[i];
+		    c_ptr++;
+		}
+		for(i=0; i<8; i++){
+		    *c_ptr = pxlv[i];
+		    c_ptr++;
+		}
+		pxlu += mpi->stride[1];
+		pxlv += mpi->stride[2];
+	    }
+	}
+    }
+    jz_dcache_wb();
+
+    return 0;
+}
+
+void write_jpeg(mp_image_t *mpi, int width, int height)
+{
+    FILE * output_file;
+    char filename[50];
+    int bslen;
+    int quality=2;        
+
+    do {
+        snprintf (filename, 50, "shot%04d.jpg", ++frameno);
+    } while (fexists(filename) && frameno < 100000);
+    if (fexists(filename)) {
+        printf("screenshot touch the top level 100000!");
+        return;
+    }
+    output_file = fopen(filename, "w+");
+
+    int align_w = (width + 15) & ~0xF;
+    int align_h = (height + 15) & ~0xF;
+    if (!mpi->ipu_line) { // SW
+	if (NULL == mpi->ref_y) {
+	    mpi->ref_y = (unsigned char *)jz4740_alloc_frame(256, align_w * align_h);
+	    mpi->ref_y = (unsigned char *)((int)mpi->ref_y & ~0xFF);
+	}
+	if (NULL == mpi->ref_c) {
+	    mpi->ref_c = (unsigned char *)jz4740_alloc_frame(256, (align_w * align_h) / 2);
+	    mpi->ref_c = (unsigned char *)((int)mpi->ref_c & ~0xFF);
+	}
+	if (0 != genyuv(mpi, width, height, mpi->ref_y, mpi->ref_c) ) { 
+	    printf("genyuv error\n");
+	    exit(1);
+	}   
+#if 0
+	{
+	    int i, j;
+	    unsigned char * data = NULL;
+	    FILE * fp = fopen("frame_yuv.c", "w+");
+	    printf("w: %d h: %d, stride : %d %d %d\n",
+		   width, height, mpi->stride[0], mpi->stride[1], mpi->stride[2]);
+	    fprintf(fp, "unsigned char frame_y[] = {\n");
+	    for (i = 0; i < height; i++) {
+		data = mpi->planes[0] + mpi->stride[0] * height;
+		for (j = 0; j < width; j++)
+		    fprintf(fp, "0x%02x, ", data[j]);
+	    }
+	    fprintf(fp, "}\n");
+	    fprintf(fp, "unsigned char frame_u[] = {\n");
+	    for (i = 0; i < height / 2; i++) {
+		data = mpi->planes[1] + mpi->stride[1] * height / 2;
+		for (j = 0; j < width / 2; j++)
+		    fprintf(fp, "0x%02x, ", data[j]);
+	    }
+	    fprintf(fp, "}\n");
+	    fprintf(fp, "unsigned char frame_v[] = {\n");
+	    for (i = 0; i < height / 2; i++) {
+		data = mpi->planes[0] + mpi->stride[1] * height / 2;
+		for (j = 0; j < width / 2; j++)
+		    fprintf(fp, "0x%02x, ", data[j]);
+	    }
+	    fprintf(fp, "}\n");
+	    fclose(fp);
+	}
+#endif
+    } else { // HW
+		mpi->ref_y = mpi->planes[0];
+		mpi->ref_c = mpi->planes[1];
+#if 0
+		{
+			int i, j, k, h;
+			unsigned char * data = NULL;
+			FILE * fp = fopen("frame.c", "w+");	
+			fprintf(fp, "unsigned char frame_y[] = {\n");
+			for (i = 0; i < align_h / 16; i++)	
+				for (j = 0; j < align_w / 16; j++)
+				{
+					data = ref_y + i * mpi->stride[0] + j * 256;	
+					fprintf(fp, "// mb %d %d\n", i, j);
+					for (k = 0; k < 16; k++) {
+						for(h = 0; h < 16; h++)
+						{
+							fprintf(fp, "0x%02x, ", *data);	
+							data++;
+						}
+						fprintf(fp, "\n");
+					}
+				}
+			fprintf(fp, "}\n");
+			fprintf(fp, "unsigned char frame_c[] = {\n");
+			for (i = 0; i < align_h / 16; i++)	
+				for (j = 0; j < align_w / 16; j++)
+				{
+					data = ref_c + i * mpi->stride[0] / 2 + j * 128;	
+					fprintf(fp, "// mb %d %d\n", i, j);
+					for (k = 0; k < 8; k++) {
+						for(h = 0; h < 16; h++)
+						{
+							fprintf(fp, "0x%02x, ", *data);	
+							data++;
+						}
+						fprintf(fp, "\n");
+					}
+				}
+			fprintf(fp, "}\n");
+			fclose(fp);
+		}
+#endif
+    }
+    if (NULL == mpi->bts) {
+	mpi->bts = (unsigned char *)jz4740_alloc_frame(256, 2000000);
+	mpi->bts = (unsigned char *)((int)mpi->bts & ~0x7F) + 256;
+	printf("Alloc bts = 0x%08x, tile y = 0x%08x, tile c = 0x%08x\n", mpi->bts, mpi->ref_y, mpi->ref_c);
+    }
+    if ((NULL == mpi->ref_y) || (NULL == mpi->ref_c) || (NULL == mpi->bts)) {
+	printf("jz4770_alloc_frame error \n");
+	exit(1);
+    }
+
+    genhead( output_file, width, height, quality );
+    _JPEGE_SliceInfo *s;
+    s = malloc(sizeof(_JPEGE_SliceInfo));
+
+    s->des_va = (uint32_t *)jz4740_alloc_frame(256, 100000);  
+    s->des_pa = (uint32_t *)get_phy_addr((int)s->des_va);
+    s->bsa  = (uint8_t *)get_phy_addr ((int)mpi->bts);
+    s->p0a  = (uint8_t *)get_phy_addr ((int)mpi->ref_y);
+    s->p1a  = (uint8_t *)get_phy_addr((int)mpi->ref_c);
+    s->nmcu = align_w * align_h / 256 - 1;
+    s->nrsm = 0x0;
+    s->ncol = 0x2;
+    s->ql_sel = quality;
+    s->huffenc_sel = 0;
+
+    /* VPU reset */    
+    RST_VPU();
+    JPEGE_SliceInit(s);
+    jz_dcache_wb();
+
+    *(volatile unsigned int *)(gp0_base + 0x8) = (VDMA_ACFG_DHA(s->des_pa) | VDMA_ACFG_RUN);
+    volatile int *aa = (volatile int *)(vpu_base + REG_SCH_STAT);
+    while(!(*(volatile unsigned int *)(jpeg_base + 0x8) & 0x80000000)){
+	//usleep(1000);
+	//printf("NMCU: %08x\n",read_reg(jpeg_base, 0x8) & 0xFFFFFF);
+    } 
+    printf("vpu work ending\n");
+    bslen = *(volatile unsigned int *)(jpeg_base + 0x8) & 0xFFFFFF;
+
+    fwrite(mpi->bts, 1, bslen,output_file);
+    fputc(255,output_file);
+    fputc(217,output_file);
+    fclose(output_file);
+}
+
 int filter_video(sh_video_t *sh_video, void *frame, double pts)
 {
     mp_image_t *mpi = frame;
     unsigned int t2 = GetTimer();
     vf_instance_t *vf = sh_video->vfilter;
     // apply video filters and call the leaf vo/ve
+    if (jpegenc_flags){
+	mp_msg(NULL,NULL,"jpegenc!!,srcw=%d,srch=%d\n",sh_video->disp_w,sh_video->disp_h);
+	jpegenc_flags=0;
+	write_jpeg(mpi,sh_video->disp_w,sh_video->disp_h);
+    }
     int ret = vf->put_image(vf, mpi, pts);
     if (ret > 0) {
         // draw EOSD first so it ends up below the OSD.

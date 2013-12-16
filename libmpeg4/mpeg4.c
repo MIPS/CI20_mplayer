@@ -59,6 +59,26 @@
 #include "jzsoc/t_intpid.h"
 #include "jzsoc/t_vputlb.h"
 
+static int *load_buf;
+static int aux_len;
+extern volatile unsigned char *cpm_base;
+
+#define CPM_VPU_SWRST    (cpm_base + 0xC4)
+#define CPM_VPU_SR     	 (0x1<<31)
+#define CPM_VPU_STP    	 (0x1<<30)
+#define CPM_VPU_ACK    	 (0x1<<29)
+
+#define write_cpm_reg(a)    (*(volatile unsigned int *)(CPM_VPU_SWRST) = a)
+#define read_cpm_reg()      (*(volatile unsigned int *)(CPM_VPU_SWRST))
+
+#define RST_VPU()							\
+    {									\
+	write_cpm_reg(read_cpm_reg() | CPM_VPU_STP);			\
+	while( !(read_cpm_reg() & CPM_VPU_ACK) );			\
+	write_cpm_reg( (read_cpm_reg() | CPM_VPU_SR) & (~CPM_VPU_STP) ); \
+	write_cpm_reg( read_cpm_reg() & (~CPM_VPU_SR) & (~CPM_VPU_STP) ); \
+    }
+
 #ifdef JZC_PMON_P0
 #include "../libjzcommon/jz4760e_pmon.h"
 #endif
@@ -600,19 +620,13 @@ av_cold int mpeg4_decode_init(AVCodecContext *avctx)
 
 #ifdef JZC_P1_OPT
   t1_dFRM=TCSM1_VUCADDR(TCSM1_DFRM_BUF);
-  int * tmp_hm_buf = jz4740_alloc_frame(32, SPACE_HALF_MILLION_BYTE);
-
-  if (tmp_hm_buf < 0)
-    printf("JZ4740 ALLOC tmp_hm_buf ERROR !! \n");
-
   {
-    int i, tmp;
-    int *src, *dst;
+    int i;
 
     *((volatile int *)(TCSM1_VUCADDR(TCSM1_P1_TASK_DONE))) = 0;
 
     FILE *fp_text;
-    int len, *reserved_mem;
+    int *reserved_mem;
     if (s->msmpeg4_version == 1 || s->msmpeg4_version == 2){
       fp_text = fopen("msmpeg4_p1.bin", "r+b");
     }else{
@@ -620,12 +634,14 @@ av_cold int mpeg4_decode_init(AVCodecContext *avctx)
     }
     if (!fp_text)
       printf(" error while open mpeg4_p1.bin \n");
-    int *load_buf = tmp_hm_buf;
-    len = fread(load_buf, 4, SPACE_HALF_MILLION_BYTE, fp_text);
+    load_buf = av_malloc(SPACE_HALF_MILLION_BYTE);
+    if(load_buf == NULL)
+	mp_msg(NULL, NULL, "Alloc AUX bin buffer fail.\n");
+    aux_len = fread(load_buf, 4, SPACE_HALF_MILLION_BYTE, fp_text);
     //printf(" mpeg4 len of p1 task = %d\n",len);
 
     reserved_mem = (int *)TCSM1_VUCADDR(MPEG4_P1_MAIN);
-    for(i=0; i<len; i++)
+    for(i=0; i<aux_len; i++)
       reserved_mem[i] = load_buf[i];
 
     fclose(fp_text);
@@ -2123,6 +2139,23 @@ int mpeg4_decode_frame(AVCodecContext *avctx,
     else
       s->next_p_frame_damaged=0;
   }
+
+  {
+      RST_VPU();
+      mpeg4_motion_init(MPEG_QPEL, MPEG_QPEL);
+
+      {
+	  int *dst = (int *)TCSM1_VUCADDR(MPEG4_P1_MAIN);
+	  memcpy(dst, load_buf, aux_len);
+      }
+
+      *((volatile int *)(TCSM1_VUCADDR(TCSM1_P1_TASK_DONE))) = 0;
+      jz_dcache_wb(); /*flush cache into reserved mem*/
+      i_sync();
+
+      mpeg4_decode_init_vlc(s);
+  }
+
 
   if((s->avctx->flags2 & CODEC_FLAG2_FAST) && s->pict_type==FF_B_TYPE){
     s->me.qpel_put= s->dsp.put_2tap_qpel_pixels_tab;

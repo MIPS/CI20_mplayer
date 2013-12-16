@@ -22,6 +22,7 @@
 #include "libmpdemux/stheader.h"
 
 extern int field_dominance;
+extern int jpegenc_flags;
 
 // dec_video.c:
 void vfm_help(void);

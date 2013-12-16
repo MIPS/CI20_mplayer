@@ -49,6 +49,10 @@
 #include "rv40mxu.h"
 #endif
 
+// Add for screenshot
+int *load_buf;
+int aux_len;
+
 extern volatile unsigned char * cpm_base;
 extern volatile unsigned char * vpu_base;
 extern volatile unsigned char * gp0_base;
@@ -3157,28 +3161,22 @@ static av_cold int rv40_decode_init(AVCodecContext *avctx)
 #endif
 
 #ifdef JZC_DCORE_OPT
-    int * tmp_hm_buf = jz4740_alloc_frame(32, SPACE_HALF_MILLION_BYTE);
-    if (tmp_hm_buf < 0)
-	printf("JZ4740 ALLOC tmp_hm_buf ERROR !! \n");
-
-    if ( 1 )
     {
-	  //several setup instructions direct p1 to execute p1_boot
+	// several setup instructions direct p1 to execute p1_boot
+	// load p1 insn and data to reserved mem
 	int i;
-	  // load p1 insn and data to reserved mem
 	FILE *fp_text;
-	int len, *reserved_mem;
-	int *load_buf;	
+	int *reserved_mem;
+	load_buf = av_malloc(SPACE_HALF_MILLION_BYTE);
 	fp_text = fopen("./rv9_p1.bin", "r+b");
 	if (!fp_text){
 	    printf(" error while open rv9_p1.bin \n");
 	    exit_player_with_rc();
 	}
-	load_buf = tmp_hm_buf;
-	len = fread(load_buf, 4, SPACE_HALF_MILLION_BYTE, fp_text);
+	aux_len = fread(load_buf, 4, SPACE_HALF_MILLION_BYTE, fp_text);
 	reserved_mem = (int *)TCSM1_VCADDR(P1_MAIN_ADDR);      
-	printf("reserved_mem = 0x%08x\n", reserved_mem);
-	for(i=0; i<len; i++)
+	printf("reserved_mem = 0x%08x, aux_len = %d\n", reserved_mem, aux_len);
+	for(i=0; i<aux_len; i++)
 	    reserved_mem[i] = load_buf[i];
 	fclose(fp_text);
     }
@@ -3491,6 +3489,16 @@ int ff_rv40_decode_frame(AVCodecContext *avctx,
 #ifdef JZC_VLC_HW_OPT
     jz_dcache_wb();
 #endif
+
+    { // init frame info
+	int *reserved_mem = (int *)TCSM1_VCADDR(P1_MAIN_ADDR);
+	RST_VPU(); // we must add this, error maybe occurs
+	memcpy(reserved_mem, load_buf, aux_len);
+
+	motion_init_rv9(RV9_QPEL, RV9_EPEL);
+	*(volatile int *)TCSM1_VCADDR(TCSM1_MOTION_DSA) = 0x8000FFFF;
+	jz_dcache_wb();
+    }
 
     for(i=0; i<slice_count; i++){
 	int offset= get_slice_offset(avctx, slices_hdr, i);

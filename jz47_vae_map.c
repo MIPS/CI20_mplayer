@@ -41,7 +41,7 @@ static unsigned int GetTimer(void)
 #define DBLK1__OFFSET 0x132D0000
 #define SDE__OFFSET 0x13290000
 #define VMAU__OFFSET 0x13280000
-
+#define JPEG__OFFSET   0x132e0000
 
 #define MC__SIZE   0x00001000
 #define VPU__SIZE 0x00001000
@@ -56,6 +56,7 @@ static unsigned int GetTimer(void)
 #define DBLK1__SIZE   0x00001000
 #define SDE__SIZE   0x00010000
 #define VMAU__SIZE 0x0000F000
+#define JPEG__SIZE     0x00001000
 
 int vae_fd;
 int tcsm_fd;
@@ -69,6 +70,7 @@ volatile unsigned char *vmau_base;
 volatile unsigned char *dblk0_base;
 volatile unsigned char *dblk1_base;
 volatile unsigned char *sde_base;
+volatile unsigned char *jpeg_base;
 
 volatile unsigned char *tcsm0_base;
 volatile unsigned char *tcsm1_base;
@@ -148,6 +150,7 @@ void VAE_map() {
     tcsm0_base  = safe_map(vae_fd, TCSM0__OFFSET , TCSM0__SIZE); 
     tcsm1_base  = safe_map(vae_fd, TCSM1__OFFSET , TCSM1__SIZE); 
     sram_base   = safe_map(vae_fd, SRAM__OFFSET  , SRAM__SIZE);
+    jpeg_base   = safe_map(vae_fd, JPEG__OFFSET  , JPEG__SIZE);
 
 #ifdef TIME_OUT_TEST
     unsigned int start_time = GetTimer();

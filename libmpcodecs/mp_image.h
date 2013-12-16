@@ -123,6 +123,8 @@ typedef struct mp_image {
     int chroma_y_shift; // vertical
     int usage_count;
     int ipu_line;
+	/*for screenshot used vpu*/
+	unsigned char * ref_y, * ref_c, * bts;
     /* for private use by filter or vo driver (to store buffer id or dmpi) */
     void* priv;
 } mp_image_t;
