@@ -157,40 +157,48 @@ int x2d_open(struct x2d_hal_info **x2d)
 	int fd = -1;
 	struct x2d_hal_info *x2d_info = NULL;
 
-	if (!x2d)
+	if (!x2d) {
 		err_ret("%s parameter is NULL!", __func__);
+		return -1;
+	}
 
 	x2d_info = *x2d;
 
 	if (!x2d_info) {
-		x2d_info = (struct x2d_hal_info *)calloc(sizeof(struct x2d_hal_info) +
-												 sizeof(struct jz_x2d_config), sizeof(char));
-		if (!x2d_info)
+		x2d_info = (struct x2d_hal_info *)calloc(sizeof(struct x2d_hal_info) + sizeof(struct jz_x2d_config), sizeof(char));
+		if (!x2d_info) {
 			err_sys("alloc struct x2d_hal_info error");
+			return -1;
+		}
 		memset(x2d_info, 0, sizeof(struct x2d_hal_info) + sizeof(struct jz_x2d_config));
 		x2d_info->x2d_deliver_data = (void *)((struct x2d_hal_info *)x2d_info + 1);
 
-		x2d_info->glb_info = (struct x2d_glb_info *)calloc(sizeof(struct x2d_glb_info),
-														   sizeof(char));
-		if (!x2d_info->glb_info)
+		x2d_info->glb_info = (struct x2d_glb_info *)calloc(sizeof(struct x2d_glb_info), sizeof(char));
+		if (!x2d_info->glb_info) {
 			err_sys("alloc struct x2d_glb_info error");
+			return -1;
+		}
 		memset(x2d_info->glb_info, 0, sizeof(struct x2d_glb_info));
-		x2d_info->dst_info = (struct x2d_dst_info *)calloc(sizeof(struct x2d_dst_info),
-														   sizeof(char));
-		if (!x2d_info->dst_info)
+		x2d_info->dst_info = (struct x2d_dst_info *)calloc(sizeof(struct x2d_dst_info), sizeof(char));
+		if (!x2d_info->dst_info) {
 			err_sys("alloc struct x2d_dst_info error");
+			return -1;
+		}
 		memset(x2d_info->dst_info, 0, sizeof(struct x2d_dst_info));
-		x2d_info->layer = (struct src_layer (*)[4])calloc(sizeof(struct src_layer)*4,
-														  sizeof(char));
-		if (!x2d_info->layer)
+		x2d_info->layer = (struct src_layer *)calloc(sizeof(struct src_layer)*4, sizeof(char));
+		if (!x2d_info->layer) {
 			err_sys("alloc struct src_layer error");
+			return -1;
+		}
 		memset(x2d_info->layer, 0, sizeof(struct src_layer) * 4);
 
 		*x2d = x2d_info;
 	}
 
-	if ((fd = open(X2D_NAME, O_RDWR)) < 0)
+	if ((fd = open(X2D_NAME, O_RDWR)) < 0) {
 		err_sys("open x2d error");
+		return -1;
+	}
 
 	x2d_info->glb_info->x2d_fd = fd;
 
@@ -222,7 +230,7 @@ get_bpp(struct src_layer *layer)
             bpp = 16;
             break;
 	default:
-		err_msg("%s unknown data format 0x%08x", __func__, fmt);
+		//err_msg("%s unknown data format 0x%08x", __func__, fmt);
 		bpp = 4;
 		break;
     }
@@ -375,35 +383,43 @@ int x2d_src_init(struct x2d_hal_info *x2d)
 	struct src_layer *layer = NULL;
 	struct jz_x2d_config *x2d_cfg = NULL;
 
-	if (!x2d)
+	if (!x2d) {
 		err_ret("%s parameter is NULL!", __func__);
+		return -1;
+	}
 
 	layer = x2d->layer;
 	glb_info = x2d->glb_info;
 	x2d_cfg = (struct jz_x2d_config *)x2d->x2d_deliver_data;
-	if (!layer || !x2d_cfg || !glb_info)
+	if (!layer || !x2d_cfg || !glb_info) {
 		err_ret("glb_info: %p layer: %p x2d_cfg: %p is NULL!", glb_info, layer, x2d_cfg);
+		return -1;
+	}
 
 	x2d_cfg->layer_num = glb_info->layer_num;
 
 	/* deliver src data */
 	for (i = 0; i < x2d_cfg->layer_num; i++) {
-		//memcpy((char *)&x2d_cfg->lay[i], (char *)&layer[i], sizeof(struct src_layer));
+		//memcpy((char *)&x2d_cfg->lay[i], (char *)layer[i], sizeof(struct src_layer));
 		x2d_cfg->lay[i] = layer[i];
 		int *fmt = &x2d_cfg->lay[i].format;
 		int *argb_order = &x2d_cfg->lay[i].argb_order;
 
 		/* calculate all kinds of parameters */
-		if (cal_deliver_addr(&x2d_cfg->lay[i]) < 0)
+		if (cal_deliver_addr(&x2d_cfg->lay[i]) < 0) {
 			err_ret("i: %d calculate addr error!", i);
+			return -1;
+		}
 
 		transform_deliver_rot(&x2d_cfg->lay[i]);
 
 		cal_deliver_size(&x2d_cfg->lay[i]);
 		transform_tox2d_format(fmt, argb_order);
 
-		if (X2D_INFORMAT_NOTSUPPORT == *fmt)
+		if (X2D_INFORMAT_NOTSUPPORT == *fmt) {
 			err_ret("i: %d input format error!", i);
+			return -1;
+		}
 
 	}
 
@@ -420,15 +436,19 @@ int x2d_dst_init(struct x2d_hal_info *x2d)
 	struct x2d_dst_info *dst_info = NULL;
 	struct jz_x2d_config *x2d_cfg = NULL;
 
-	if (!x2d)
+	if (!x2d) {
 		err_ret("%s parameter is NULL!", __func__);
+		return -1;
+	}
 
 	glb_info = x2d->glb_info;
 	dst_info = x2d->dst_info;
 	x2d_cfg = (struct jz_x2d_config *)x2d->x2d_deliver_data;
-	if (!glb_info || !dst_info || !x2d_cfg)
+	if (!glb_info || !dst_info || !x2d_cfg) {
 		err_ret("glb_info: %p dst_info: %p x2d_cfg: %p error!", 
 				glb_info, dst_info, x2d_cfg);
+		return -1;
+	}
 
 	/* deliver global data */
 	x2d_cfg->watchdog_cnt = glb_info->watchdog_cnt;
@@ -451,21 +471,29 @@ int x2d_start(struct x2d_hal_info *x2d)
 	int ret = 0;
 	struct jz_x2d_config *x2d_cfg = NULL;
 
-	if (!x2d)
+	if (!x2d) {
 		err_ret("%s parameter is NULL!", __func__);
+		return -1;
+	}
 
 	x2d_cfg = (struct jz_x2d_config *)x2d->x2d_deliver_data;
-	if (!x2d_cfg)
+	if (!x2d_cfg) {
 		err_ret("%s x2d_cfg is NULL!", __func__);
+		return -1;
+	}
 
 #ifdef DEBUG_X2D
 	x2d_dump_cfg(x2d);
 #endif
-	if (ioctl(x2d->glb_info->x2d_fd, IOCTL_X2D_SET_CONFIG, x2d_cfg) < 0)
+	if (ioctl(x2d->glb_info->x2d_fd, IOCTL_X2D_SET_CONFIG, x2d_cfg) < 0) {
 		err_sys("%s %d: IOCTL_X2D_SET_CONFIG error!", __func__, __LINE__);
+		return -1;
+	}
 
-	if (ioctl(x2d->glb_info->x2d_fd, IOCTL_X2D_START_COMPOSE) < 0)
+	if (ioctl(x2d->glb_info->x2d_fd, IOCTL_X2D_START_COMPOSE) < 0) {
 		err_sys("%s %d: IOCTL_X2D_START_COMPOSE error!", __func__, __LINE__);
+		return -1;
+	}
 
 	return 0;
 }
@@ -477,14 +505,20 @@ int x2d_stop(struct x2d_hal_info *x2d)
 {
 	struct x2d_glb_info *glb_info = NULL;
 
-	if (!x2d)
+	if (!x2d) {
 		err_ret("%s parameter is NULL!", __func__);
+		return -1;
+	}
 	glb_info = x2d->glb_info;
-	if (!glb_info)
+	if (!glb_info) {
 		err_ret("%s glb_info is NULL!", __func__);
+		return -1;
+	}
 
-	if (ioctl(glb_info->x2d_fd, IOCTL_X2D_STOP) < 0)
+	if (ioctl(glb_info->x2d_fd, IOCTL_X2D_STOP) < 0) {
 		err_sys("%s %d IOCTL_X2D_STOP error!", __func__, __LINE__);
+		return -1;
+	}
 
 	return 0;
 }
@@ -501,6 +535,7 @@ int x2d_release(struct x2d_hal_info **x2d)
 	free(x2d_info->dst_info);
 	free(x2d_info->layer);
 	free(x2d_info);
+	*x2d = NULL;
 
 	return 0;
 }
