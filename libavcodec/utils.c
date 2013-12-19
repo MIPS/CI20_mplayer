@@ -324,6 +324,9 @@ int avcodec_default_get_buffer(AVCodecContext *s, AVFrame *pic){
 	    const int h_shift= ((i%2)==0) ? 0 : h_chroma_shift;
 	    const int v_shift= ((i%2)==0) ? 0 : v_chroma_shift;
 
+		if (s->codec_id == CODEC_ID_H264)
+	    	buf->linesize[i] = s->width >> (i != 0);
+		else
 	    buf->linesize[i] = picture.linesize[i];
   	    aline[i] = picture.linesize[0];
 #if 0
@@ -408,6 +411,9 @@ int avcodec_default_get_buffer(AVCodecContext *s, AVFrame *pic){
 	    const int h_shift= i==0 ? 0 : h_chroma_shift;
 	    const int v_shift= i==0 ? 0 : v_chroma_shift;
 
+		if (s->codec_id == CODEC_ID_H264)
+	    	buf->linesize[i] = s->width >> (i != 0);
+		else
 	    buf->linesize[i]= picture.linesize[i];
 #ifdef JZ_LINUX_OS
 	    buf->base[i]= jz4740_alloc_frame(256,size[i]+16); //FIXME 16
@@ -489,7 +495,7 @@ void avcodec_default_release_buffer(AVCodecContext *s, AVFrame *pic){
     }
     if(use_jz_buf){
 #ifdef USE_IPU_THROUGH_MODE
-	if ((unsigned int)buf->data[0] != disp_buf0 && (unsigned int)buf->data[0] != disp_buf1 && (unsigned int)buf->data[0] != disp_buf2)
+      if ((unsigned int)buf->data[0] != disp_buf0 && (unsigned int)buf->data[0] != disp_buf1 && (unsigned int)buf->data[0] != disp_buf2)
 	{
 	  assert(i < s->internal_buffer_count);
 	  s->internal_buffer_count--;
