@@ -16,6 +16,7 @@
 #include <string.h>
 #include "libmpcodecs/vf.h"
 #include "libswscale/swscale_internal.h"
+#include "jz4780_fb.h"
 
 static int x2d_Init = 0;
 static struct fb_fix_screeninfo fb_fix_info;
@@ -32,12 +33,7 @@ struct src_layer *x2d_Layer;
 struct x2d_glb_info *x2d_GlbInfo;
 struct x2d_dst_info *x2d_DstInfo;
 
-unsigned int new_fb;
-//unsigned char* new_fb;
-void *fbvirt = NULL;
-unsigned char* new_fb_head;
-
-extern int mmapfd;
+void *fg1_addr = NULL;
 
 static inline int roundUpToPageSize(int x)
 {
@@ -151,12 +147,14 @@ static int unmapIPUDestBuffer(int width, int height, int bpp, void *vaddr)
 	printf("unmapIPUDestBuffer failed\n");
 	return -1;
 }
-//#endif
 
 static int mapLcdFrameBuffer(void)
 {
 	struct fb_var_screeninfo info;
 	int fbSize;
+	int id;
+	int fg1_enabled;
+	unsigned int screen_len;
 
 	if ( fbfd > 0 )
 		return 0;
@@ -174,51 +172,48 @@ static int mapLcdFrameBuffer(void)
 	if (ioctl(fbfd, FBIOGET_VSCREENINFO, &fb_var_info) == -1)
 		return -1;
 
-	if (ioctl(fbfd, JZFB_GET_BUFFER, &mSyncBuffer) == -1) 
-		return -1;
-
-	info = fb_var_info;
+	{ //set fg0 pixel alpha
+		struct jzfb_fg_alpha fg0_alpha = {0, 1, 1, 0};
+		if(ioctl(fbfd, JZFB_SET_ALPHA, &fg0_alpha) < 0) {
+			perror("set fg0 alpha fail");
+			return -1;
+		}
+	}
 
 	/* map fb address */
+	info = fb_var_info;
+	screen_len = info.xres * info.yres * info.bits_per_pixel / 8;
 	fbSize = roundUpToPageSize(fb_fix_info.line_length * info.yres_virtual);
 	fb_vaddr = mmap(0, fbSize, PROT_READ|PROT_WRITE, MAP_SHARED, fbfd, 0);
 	if (fb_vaddr == MAP_FAILED) {
-		printf("Error mapping the framebuffer failed\n");
+		perror("mapping the framebuffer failed");
 		return -1;
 	}
 
-//	memset(fb_vaddr, 0, fbSize);
-	//new_fb=jz4740_alloc_frame(0x400,fbSize);
-#if 0
-	if(NULL==(new_fb_head=(unsigned char*)malloc(fbSize+64)))
-		printf("malloc error!\n");
-	else
-		printf("malloc success!\n");
-		
-	new_fb=  ((unsigned int)new_fb_head + 64) & ~ (64 - 1);
-
-	{
-		int k = 0;
-		for (k = 0; k < fbSize; k += 4) {
-			*((unsigned int *)(new_fb+k)) = 0x00ff0080;
-		}
+	/*get fg1 current display buffer.*/
+	id = 1;
+	if (ioctl(fbfd, JZFB_GET_BUFFER, &id)) {
+		perror("get fg1's buffer id error");
+		return -1;
 	}
-#else
-	  if (ioctl(fbfd, JZFB_ACQUIRE_BUFFER, &new_fb)) {
-		  printf("Error reading fixscreen information\n");
-		  return(-2);
-	  }
+	printf("Current display buffer is:%d\n",id);
 
-	  fbvirt = mmap(0, fbSize, PROT_READ|PROT_WRITE, MAP_SHARED, mmapfd, new_fb & 0x1fffffff);
-	  if ( fbvirt == NULL ) { 
-		  printf("mmap /dev/mem failed.\n");
-		  return(-1);
-	  }   
+	/* config fg1's framedesc */
+	info.yoffset = id * info.yres;
+	if (ioctl(fbfd, FBIOPAN_DISPLAY, &info)) {
+		perror("Error pan display size");
+		return -1;
+	}
 
-	  memset(fbvirt, 0x0, fbSize);
-#endif
-//	memset(new_fb,0x80,fbSize);
-//	jz_dcache_wb(); 
+	fg1_addr = fb_vaddr + screen_len * id;
+	memset(fg1_addr, 0, screen_len);
+
+	fg1_enabled = 1;
+	if (ioctl(fbfd, JZFB_ENABLE_FG1, &fg1_enabled)) {
+		perror("Error enable fg1");
+	}
+
+	/* used for dmmu */
 	tmp_rgb_vaddr = malloc(0x800000);
 
 	/* dmmu x2d_init */
@@ -276,22 +271,6 @@ unsigned int get_transform(int rotate)
 }
 static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 {
-#if 0
-	unsigned int src_addr, src_w, src_h, src_stride, dst_addr, dst_w, dst_h, dst_stride, dstRect_x, dstRect_y, dstRect_w,dstRect_h;
-	src_addr= mpi->planes[0];
-	src_w = vf->priv->w;
-	src_h = vf->priv->h;
-	src_stride = src_w<<4;
-	dst_addr = fb_vaddr;
-	dst_w = fb_var_info.xres;
-	dst_h = fb_var_info.yres;
-	//dst_stride = fb_var_info.xres * fb_var_info.bits_per_pixel / 8;
-	dst_stride = fb_fix_info.line_length;
-	dstRect_x = 0;
-	dstRect_y = 0;
-	dstRect_w = fb_var_info.xres;
-	dstRect_h = fb_var_info.yres;
-#endif
 	int ret = 0;
 	//int dstW = vf->priv->ctx->dstW, dstH = vf->priv->ctx->dstH;
 	int dstW = vf->priv->w, dstH = vf->priv->h;
@@ -303,25 +282,18 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 	//debug_set_buffer_color_bar(mpi->planes[0], vf->priv->w, vf->priv->h/4, vf->priv->w*4, 4);
 	SwsContext *c = vf->priv->ctx;
 	unsigned int transform = 0;
-#if 0
-	if (mapIPUDestBuffer(fb_var_info.xres, fb_var_info.yres, fb_var_info.bits_per_pixel, new_fb) < 0) {
-		return -1;
-	}
-#else
-	if (mapIPUDestBuffer(fb_var_info.xres, fb_var_info.yres, fb_var_info.bits_per_pixel, fbvirt) < 0) {
-		return -1;
-	}
-#endif
+
 	/* map address */
-	if (mapIPUDestBuffer(fb_var_info.xres, fb_var_info.yres, fb_var_info.bits_per_pixel, fb_vaddr) < 0) {
+	if (mapIPUDestBuffer(fb_var_info.xres, fb_var_info.yres, fb_var_info.bits_per_pixel / 8, fg1_addr) < 0) {
+		printf("mapIPUDestBuffer error in %d\n", __LINE__);
 		return -1;
 	}
 	if (mapIPUSourceBuffer(vf, mpi) < 0) {
+		printf("mapIPUDestBuffer error in %d\n", __LINE__);
 		return -1;
 	}
 	
-	LOG_DBG("x2d_init x2d src. line: %d", __LINE__);
-	x2d_GlbInfo->layer_num = 2; 
+	x2d_GlbInfo->layer_num = 1;
 	x2d_GlbInfo->watchdog_cnt = 0;
 	transform = get_transform(vf->qrot);
 #if 1
@@ -394,38 +366,14 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 	x2d_Layer[0].out_w_offset = posx;
 	x2d_Layer[0].out_h_offset = posy;
 #endif
-#if 1 
-	x2d_Layer[1].format = HAL_PIXEL_FORMAT_RGBA_8888;
-	x2d_Layer[1].in_width = fb_var_info.xres;
-	x2d_Layer[1].in_height = fb_var_info.yres;
-	x2d_Layer[1].out_width = fb_var_info.xres;
-	x2d_Layer[1].out_height = fb_var_info.yres;
-
-	//x2d_Laye1[1]->addr = new_fb;
-	x2d_Layer[1].addr = fb_vaddr;
-	x2d_Layer[1].y_stride = fb_fix_info.line_length;
-
-	x2d_Layer[1].glb_alpha_en = 0;
-	x2d_Layer[1].global_alpha_val = 0x80;
-	x2d_Layer[1].preRGB_en = 0;
-//	x2d_Layer[1]->color_cov_en = 0;
-	x2d_Layer[1].out_w_offset = 0;
-	x2d_Layer[1].out_h_offset = 0;
-	x2d_Layer[1].mask_en = 0;
-	x2d_Layer[1].msk_val = 0xffff0000;
-	x2d_Layer[1].transform = 0;
-#endif
 
 	/* x2d_init x2d dst */
-	LOG_DBG("x2d_init x2d dst. line: %d", __LINE__);
 	x2d_GlbInfo->tlb_base = x2d_TlbBasePhys;
 	x2d_DstInfo->dst_format = HAL_PIXEL_FORMAT_RGBX_8888;
-	//x2d_DstInfo->dst_width = (fb_var_info.xres>>3)<<3;
-	//x2d_DstInfo->dst_height = (fb_var_info.yres>>3)<<3;
 	x2d_DstInfo->dst_width = fb_var_info.xres;
 	x2d_DstInfo->dst_height = fb_var_info.yres;
 	bytes_per_pixel = fb_fix_info.line_length / fb_var_info.xres;
-	x2d_DstInfo->dst_address = fbvirt;
+	x2d_DstInfo->dst_address = fg1_addr;
 	//x2d_DstInfo->dst_address = fb_vaddr;
 	x2d_DstInfo->dst_address = ((x2d_DstInfo->dst_address >> 3) << 3);
 
@@ -446,9 +394,9 @@ static int updateVideoGUI(struct vf_instance *vf, mp_image_t *mpi, double pts)
 		printf("x2d dst x2d_init failed");
 
 	/* start x2d */
-	LOG_DBG("x2d start. line: %d", __LINE__);
 	if ((ret = x2d_start(x2d)) < 0)
 		printf("x2d_start failed");
+
 	return 0;
 }
 
@@ -478,10 +426,19 @@ int jz4780_x2d_exit(void)
 	/* close x2d */
 	x2d_release(&x2d);
 	x2d_Init = 0;
-//	free(new_fb_head);
+
 #if 1
-	if (ioctl(fbfd, JZFB_RELEASE_BUFFER, &new_fb)) {
-		printf("Error reading fixscreen information\n");
+    struct jzfb_fg_alpha fg0_alpha = {0, 1, 0, 0xff};
+    if(ioctl(fbfd, JZFB_SET_ALPHA, &fg0_alpha) < 0) {
+        printf("%s set fg0 alpha: fail",  __func__);
+        return -1;
+    }
+#endif
+
+#if 1
+	int fg1_enabled = 0;
+	if (ioctl(fbfd, JZFB_ENABLE_FG1, &fg1_enabled)) {
+		printf("Error disable fg1 .\n");
 	}
 #endif
 	/* close dmmu */
