@@ -83,7 +83,7 @@ void jz47_exit_memalloc (void *p)
   {
     if (jz47_memdev[i].vaddr)
     {
-      munmap((void *)jz47_memdev[i].vaddr, jz47_memdev[i].totalsize);
+      munmap((void *)jz47_memdev[i].vaddr, jz47_memdev[i].totalsize * 2);
       memset (&jz47_memdev[i], 0, sizeof(struct JZ47_MEM_DEV));
     }
   }
