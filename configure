@@ -8402,14 +8402,6 @@ else
 fi
 echores "$_crash_debug"
 
-echocheck "compiler support for noexecstack"
-if cflag_check -Wl,-z,noexecstack ; then
-  extra_ldflags="-Wl,-z,noexecstack $extra_ldflags"
-  echores "yes"
-else
-  echores "no"
-fi
-
 echocheck "linker support for --nxcompat --no-seh --dynamicbase"
 if cflag_check "-Wl,--nxcompat -Wl,--no-seh -Wl,--dynamicbase" ; then
   extra_ldflags="-Wl,--nxcompat -Wl,--no-seh -Wl,--dynamicbase $extra_ldflags"
