@@ -85,7 +85,8 @@ static enum PixelFormat get_format(struct AVCodecContext *avctx,
                                    const enum PixelFormat *pix_fmt);
 
 static int lavc_param_workaround_bugs= FF_BUG_AUTODETECT;
-static int lavc_param_error_resilience=2;
+//static int lavc_param_error_resilience=2;
+static int lavc_param_error_resilience=0;//by gjwang; for cavlc ff_er_frame_end not try to resilience
 static int lavc_param_error_concealment=3;
 static int lavc_param_gray=0;
 static int lavc_param_vstats=0;
@@ -285,7 +286,7 @@ static int init(sh_video_t *sh){
     if(vd_use_slices && (lavc_codec->capabilities&CODEC_CAP_DRAW_HORIZ_BAND) && !do_vis_debug)
         ctx->do_slices=1;
 
-    if(lavc_codec->capabilities&CODEC_CAP_DR1 && !do_vis_debug && lavc_codec->id != CODEC_ID_H264 && lavc_codec->id != CODEC_ID_INTERPLAY_VIDEO && lavc_codec->id != CODEC_ID_ROQ && lavc_codec->id != CODEC_ID_VP8)
+    if(lavc_codec->capabilities&CODEC_CAP_DR1 && !do_vis_debug && lavc_codec->id != CODEC_ID_INTERPLAY_VIDEO && lavc_codec->id != CODEC_ID_ROQ && lavc_codec->id != CODEC_ID_VP8) // lavc_codec->id != CODEC_ID_H264 && 
         ctx->do_dr1=1;
     ctx->b_age= ctx->ip_age[0]= ctx->ip_age[1]= 256*256*256*64;
     ctx->ip_count= ctx->b_count= 0;
@@ -296,6 +297,12 @@ static int init(sh_video_t *sh){
     avctx->opaque = sh;
     avctx->codec_type = CODEC_TYPE_VIDEO;
     avctx->codec_id = lavc_codec->id;
+
+    if (avctx->codec_id == CODEC_ID_H264 || avctx->codec_id == CODEC_ID_WMV3 || avctx->codec_id == CODEC_ID_VC1 || avctx->codec_id == CODEC_ID_MPEG4 || avctx->codec_id == CODEC_ID_RV40 || avctx->codec_id == CODEC_ID_MSMPEG4V3 || avctx->codec_id == CODEC_ID_MSMPEG4V2 || avctx->codec_id == CODEC_ID_MSMPEG4V1 || avctx->codec_id == CODEC_ID_VP8 || avctx->codec_id == CODEC_ID_MPEG2VIDEO ) {
+      sh->video_line = 1;
+    }else{
+      sh->video_line = 0;
+    }
 
 #if CONFIG_VDPAU
     if(lavc_codec->capabilities & CODEC_CAP_HWACCEL_VDPAU){
@@ -577,6 +584,9 @@ static int init_vo(sh_video_t *sh, enum PixelFormat pix_fmt){
     return 0;
 }
 
+extern int use_jz_buf;
+extern int use_jz_buf_change;
+
 static int get_buffer(AVCodecContext *avctx, AVFrame *pic){
     sh_video_t *sh = avctx->opaque;
     vd_ffmpeg_ctx *ctx = sh->context;
@@ -585,6 +595,12 @@ static int get_buffer(AVCodecContext *avctx, AVFrame *pic){
     int type= MP_IMGTYPE_IPB;
     int width= avctx->width;
     int height= avctx->height;
+
+    if(use_jz_buf_change){
+      sh->video_line = use_jz_buf;
+      use_jz_buf_change = 0;
+    }
+
     avcodec_align_dimensions(avctx, &width, &height);
 //printf("get_buffer %d %d %d\n", pic->reference, ctx->ip_count, ctx->b_count);
 
@@ -834,10 +850,11 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags){
     pkt.size = len;
     // HACK: make PNGs decode normally instead of as CorePNG delta frames
     pkt.flags = PKT_FLAG_KEY;
+
     ret = avcodec_decode_video2(avctx, pic, &got_picture, &pkt);
 
     dr1= ctx->do_dr1;
-    if(ret<0) mp_msg(MSGT_DECVIDEO, MSGL_WARN, "Error while decoding frame!\n");
+    //if(ret<0) mp_msg(MSGT_DECVIDEO, MSGL_WARN, "Error while decoding frame!\n");
 //printf("repeat: %d\n", pic->repeat_pict);
 //-- vstats generation
     while(lavc_param_vstats){ // always one time loop

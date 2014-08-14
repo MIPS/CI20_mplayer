@@ -16,7 +16,7 @@
  *
  * Modified for use with MPlayer, for details see the changelog at
  * http://svn.mplayerhq.hu/mplayer/trunk/
- * $Id$
+ * $Id: dct36_3dnow.c,v 1.1.1.1 2012/03/27 04:02:57 dqliu Exp $
  *
  * Original disclaimer:
  *  The author of this program disclaim whole expressed or implied

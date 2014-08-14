@@ -24,7 +24,7 @@
 #include "demuxer.h"
 
 #define MAX_VIDEO_PACKET_SIZE (224*1024+4)
-#define VIDEOBUFFER_SIZE 0x100000
+#define VIDEOBUFFER_SIZE 0x200000
 
 extern unsigned char* videobuffer;
 extern int videobuf_len;

@@ -11,7 +11,7 @@
 /*
  * Modified for use with MPlayer, for details see the changelog at
  * http://svn.mplayerhq.hu/mplayer/trunk/
- * $Id$
+ * $Id: layer1.c,v 1.1.1.1 2012/03/27 04:02:57 dqliu Exp $
  *
  * The above-mentioned README file has the following to say about licensing:
  *

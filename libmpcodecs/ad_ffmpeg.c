@@ -30,7 +30,7 @@
 #include "libaf/reorder_ch.h"
 
 #include "mpbswap.h"
-
+extern int aac_bugs;
 static const ad_info_t info =
 {
 	"FFmpeg/libavcodec audio decoders",
@@ -55,7 +55,11 @@ static int preinit(sh_audio_t *sh)
 
 static int setup_format(sh_audio_t *sh_audio, const AVCodecContext *lavc_context)
 {
-    int samplerate    = lavc_context->sample_rate;
+    int samplerate;
+    if (aac_bugs!=0)
+       samplerate = aac_bugs;
+    else 
+       samplerate = lavc_context->sample_rate;
     int sample_format = sh_audio->sample_format;
     switch (lavc_context->sample_fmt) {
         case SAMPLE_FMT_U8:  sample_format = AF_FORMAT_U8;       break;
@@ -68,13 +72,20 @@ static int setup_format(sh_audio_t *sh_audio, const AVCodecContext *lavc_context
     if(sh_audio->wf){
         // If the decoder uses the wrong number of channels all is lost anyway.
         // sh_audio->channels=sh_audio->wf->nChannels;
-
         if (lavc_context->codec_id == CODEC_ID_AAC &&
             samplerate == 2*sh_audio->wf->nSamplesPerSec) {
+
+#if 0
             mp_msg(MSGT_DECAUDIO, MSGL_WARN,
                    "Ignoring broken container sample rate for ACC with SBR\n");
+#endif
         } else if (sh_audio->wf->nSamplesPerSec)
-            samplerate=sh_audio->wf->nSamplesPerSec;
+	  {
+            if (aac_bugs!=0)
+              samplerate = aac_bugs;
+            else 
+              samplerate = sh_audio->wf->nSamplesPerSec;
+	  }
     }
     if (lavc_context->channels != sh_audio->channels ||
         samplerate != sh_audio->samplerate ||

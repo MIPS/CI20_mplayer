@@ -1,6 +1,6 @@
 #!/bin/sh
 # MPlayer mirroring script
-# $Id$
+# $Id: update_mplayer_rsync,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
 
 PATH=<set_path_if_necessary>
 LOCK=<path_to_lockfile>

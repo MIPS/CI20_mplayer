@@ -10,7 +10,7 @@
 
 /*
  * Copyright (C) 1998-2008 VideoLAN
- * $Id$
+ * $Id: dvdcss.h,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

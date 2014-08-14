@@ -1,7 +1,7 @@
 /*
  * Modified for use with MPlayer, for details see the changelog at
  * http://svn.mplayerhq.hu/mplayer/trunk/
- * $Id$
+ * $Id: dct36.c,v 1.1.1.1 2012/03/27 04:02:57 dqliu Exp $
  */
 
 /*

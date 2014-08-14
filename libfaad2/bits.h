@@ -23,7 +23,7 @@
 ** For more info contact Ahead Software through Mpeg4AAClicense@nero.com.
 **
 ** Initially modified for use with MPlayer by Arpad Gereöffy on 2003/08/30
-** $Id$
+** $Id: bits.h,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
 ** detailed changelog at http://svn.mplayerhq.hu/mplayer/trunk/
 ** local_changes.diff contains the exact changes to this file.
 **/

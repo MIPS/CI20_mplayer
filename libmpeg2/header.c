@@ -23,7 +23,7 @@
  *
  * Modified for use with MPlayer, see libmpeg2_changes.diff for the exact changes.
  * detailed changelog at http://svn.mplayerhq.hu/mplayer/trunk/
- * $Id$
+ * $Id: header.c,v 1.2 2012/09/10 03:49:03 kznan Exp $
  */
 
 #include "config.h"
@@ -35,6 +35,8 @@
 #include "mpeg2.h"
 #include "attributes.h"
 #include "mpeg2_internal.h"
+
+#include "mpeg2_config.h"
 
 #define SEQ_EXT 2
 #define SEQ_DISPLAY_EXT 4
@@ -422,6 +424,10 @@ static void copy_matrix (mpeg2dec_t * mpeg2dec, int idx)
     }
 }
 
+#ifdef MPEG2_SCH_CONTROL
+extern uint32_t coef_qt_hw[4][16];
+#endif
+
 static void finalize_matrix (mpeg2dec_t * mpeg2dec)
 {
     mpeg2_decoder_t * decoder = &(mpeg2dec->decoder);
@@ -438,6 +444,52 @@ static void finalize_matrix (mpeg2dec_t * mpeg2dec)
 	} else if (mpeg2dec->copy_matrix & (5 << i))
 	    decoder->chroma_quantizer[i] = decoder->quantizer_prescale[i];
     }
+#ifdef MPEG2_SCH_CONTROL
+    {	
+	  int i_list;
+	  int j;
+
+	  for( i_list = 0; i_list < 4; i_list++ )
+	    {
+	      unsigned char *ptr;
+	      ptr = mpeg2dec->quantizer_matrix[i_list];
+	      unsigned char map_tab[8] = {0, 2, 4, 6, 1, 3, 5, 7};
+	      unsigned char coef_tmp[8][8];
+	      if ( i_list == 2)
+		{
+		  if ( decoder->chroma_quantizer[0] != decoder->quantizer_prescale[2])
+		    {
+		      ptr = mpeg2dec->quantizer_matrix[0];
+		    }
+		}
+	      else
+	      if ( i_list == 3)
+		{
+		  if ( decoder->chroma_quantizer[1] != decoder->quantizer_prescale[3])
+		    {
+		      ptr = mpeg2dec->quantizer_matrix[1];
+		    }
+		}
+		
+	      int i;
+	      int j;
+	      for ( i = 0 ; i<8; i++)
+		for ( j = 0 ; j<8; j++)
+		  {
+		    coef_tmp[map_tab[i]][map_tab[j]] = ptr[8*i+j];
+		  }
+
+	      unsigned int *coef_ptr = coef_tmp;
+	      
+	      for ( i = 0 ; i < 16; i++)
+		{
+		  //write_reg(VMAU_V_BASE + VMAU_QT_BASE+ i_list*64 + (i<<2), coef_ptr[i]);
+		  coef_qt_hw[i_list][i]= coef_ptr[i];
+		}
+	    }      	
+	  printf("----hello qscale------\n");
+    }
+#endif
 }
 
 static mpeg2_state_t invalid_end_action (mpeg2dec_t * mpeg2dec)
@@ -590,7 +642,11 @@ int mpeg2_header_picture (mpeg2dec_t * mpeg2dec)
     /* XXXXXX decode extra_information_picture as well */
 
     decoder->q_scale_type = 0;
+#ifdef JZC_MXU_OPT
+    decoder->intra_dc_precision = 0;
+#else
     decoder->intra_dc_precision = 7;
+#endif
     decoder->frame_pred_frame_dct = 1;
     decoder->concealment_motion_vectors = 0;
     decoder->scan = mpeg2_scan_norm;
@@ -614,7 +670,11 @@ static int picture_coding_ext (mpeg2dec_t * mpeg2dec)
     decoder->b_motion.f_code[1] = (buffer[2] >> 4) - 1;
 
     flags = picture->flags;
+#ifdef JZC_MXU_OPT
+    decoder->intra_dc_precision = ((buffer[2] >> 2) & 3);
+#else
     decoder->intra_dc_precision = 7 - ((buffer[2] >> 2) & 3);
+#endif
     decoder->picture_structure = buffer[2] & 3;
     switch (decoder->picture_structure) {
     case TOP_FIELD:
@@ -926,6 +986,7 @@ mpeg2_state_t mpeg2_header_slice_start (mpeg2dec_t * mpeg2dec)
 	int b_type;
 
 	b_type = (mpeg2dec->decoder.coding_type == B_TYPE);
+
 	mpeg2_init_fbuf (&(mpeg2dec->decoder), mpeg2dec->fbuf[0]->buf,
 			 mpeg2dec->fbuf[b_type + 1]->buf,
 			 mpeg2dec->fbuf[b_type]->buf);

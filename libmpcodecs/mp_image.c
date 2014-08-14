@@ -26,47 +26,167 @@
 #include <malloc.h>
 #endif
 
+#include "../libjzcommon/com_config.h"
 #include "libmpcodecs/img_format.h"
 #include "libmpcodecs/mp_image.h"
+#include "../libjzcommon/t_vputlb.h"
 
 #include "libvo/fastmemcpy.h"
 #include "libavutil/mem.h"
+extern volatile int tlb_i;
+extern int use_jz_buf;
+
+#define SET_TLB()\
+if(!tlb_i){\
+  SET_VPU_TLB(0, 1, PSIZE_32M, \
+	      get_phy_addr((int)data)>>22,\
+	      get_phy_addr((int)data)>>22);\
+  tlb_i++;\
+  if(((GET_VPU_TLB(0)>>25) & 0x3FF) != ((get_phy_addr((int)data+size)>>25) & 0x3FF)){\
+    SET_VPU_TLB(tlb_i, 1, PSIZE_32M,\
+		get_phy_addr((int)data+size)>>22,\
+		get_phy_addr((int)data+size)>>22);\
+    tlb_i++;\
+  }\
+      }\
+else {\
+  int tmp_i, start_hit=0, end_hit=0;\
+  for(tmp_i=0; tmp_i<tlb_i; tmp_i++){\
+    if(((GET_VPU_TLB(tmp_i)>>25) & 0x3FF) == ((get_phy_addr((int)data)>>25) & 0x3FF) ){\
+      start_hit++;\
+      break;\
+    }\
+  }\
+  if(!start_hit){\
+    SET_VPU_TLB(tlb_i, 1, PSIZE_32M,\
+		get_phy_addr((int)data)>>22,\
+		get_phy_addr((int)data)>>22);\
+    tlb_i++;\
+  }\
+\
+  for(tmp_i=0; tmp_i<tlb_i; tmp_i++){\
+    if(((GET_VPU_TLB(tmp_i)>>25) & 0x3FF) == ((get_phy_addr((int)data+size)>>25) & 0x3FF) ){\
+      end_hit++;\
+      break;\
+    }\
+  }\
+  if(!end_hit){\
+    SET_VPU_TLB(tlb_i, 1, PSIZE_32M,\
+		get_phy_addr((int)data+size)>>22,\
+		get_phy_addr((int)data+size)>>22);\
+    tlb_i++;\
+  }\
+}\
+if(tlb_i>8){\
+  printf("Error: TLB entry overflow!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");\
+  return -1;\
+}
 
 void mp_image_alloc_planes(mp_image_t *mpi) {
   // IF09 - allocate space for 4. plane delta info - unused
-  if (mpi->imgfmt == IMGFMT_IF09) {
-    mpi->planes[0]=av_malloc(mpi->bpp*mpi->width*(mpi->height+2)/8+
-                            mpi->chroma_width*mpi->chroma_height);
-  } else
-    mpi->planes[0]=av_malloc(mpi->bpp*mpi->width*(mpi->height+2)/8);
+  unsigned char* data;
+  int w,h,ch,w_aln,size;
+  w = mpi->width;
+  h = mpi->height;
+  ch = mpi->chroma_height;
+  w_aln = w*16;
+
+  if(use_jz_buf)
+    if (mpi->imgfmt == IMGFMT_IF09) {
+#ifdef JZ_LINUX_OS
+      mpi->planes[0]=jz4740_alloc_frame(256,mpi->bpp*mpi->width*(mpi->height+2)/8+
+					mpi->chroma_width*mpi->chroma_height);
+#else
+      mpi->planes[0]=av_malloc(mpi->bpp*mpi->width*(mpi->height+2)/8+
+			       mpi->chroma_width*mpi->chroma_height);
+#endif
+    }else{
+#ifdef JZ_LINUX_OS
+#ifdef JZC_TLB_OPT
+      size = w*h + w*ch + 1024;
+      data = jz4740_alloc_frame(256,size);
+      SET_TLB();
+      memset(data, 128,size);
+      mpi->planes[0]=data + 256;
+#else
+      data = jz4740_alloc_frame(256,mpi->bpp*w*(h+2)/8);
+      mpi->planes[0]=data;
+#endif
+
+#else
+      mpi->planes[0]=av_malloc(mpi->bpp*mpi->width*(mpi->height+2)/8);
+#endif
+    }else
+    if (mpi->imgfmt == IMGFMT_IF09) {
+#ifdef JZ_LINUX_OS
+      mpi->planes[0]=jz4740_alloc_frame(256,mpi->bpp*mpi->width*(mpi->height+2)/8+
+					mpi->chroma_width*mpi->chroma_height);
+#else
+      mpi->planes[0]=av_malloc(mpi->bpp*mpi->width*(mpi->height+2)/8+
+			       mpi->chroma_width*mpi->chroma_height);
+#endif
+    }else{
+#ifdef JZ_LINUX_OS
+      data = jz4740_alloc_frame(256,mpi->bpp*w*(h+2)/8);
+      mpi->planes[0]=data; 
+#else
+      mpi->planes[0]=av_malloc(mpi->bpp*mpi->width*(mpi->height+2)/8);
+#endif
+    }
+
   if (mpi->flags&MP_IMGFLAG_PLANAR) {
-    int bpp = IMGFMT_IS_YUVP16(mpi->imgfmt)? 2 : 1;
-    // YV12/I420/YVU9/IF09. feel free to add other planar formats here...
-    mpi->stride[0]=mpi->stride[3]=bpp*mpi->width;
-    if(mpi->num_planes > 2){
-      mpi->stride[1]=mpi->stride[2]=bpp*mpi->chroma_width;
-      if(mpi->flags&MP_IMGFLAG_SWAPPED){
-        // I420/IYUV  (Y,U,V)
-        mpi->planes[1]=mpi->planes[0]+mpi->stride[0]*mpi->height;
-        mpi->planes[2]=mpi->planes[1]+mpi->stride[1]*mpi->chroma_height;
-        if (mpi->num_planes > 3)
-            mpi->planes[3]=mpi->planes[2]+mpi->stride[2]*mpi->chroma_height;
+    if(use_jz_buf){
+      int bpp = IMGFMT_IS_YUVP16(mpi->imgfmt)? 2 : 1;
+      // YV12/I420/YVU9/IF09. feel free to add other planar formats here...
+      mpi->stride[0]=bpp*w_aln;
+      mpi->stride[3]=bpp*mpi->chroma_width;
+      if(mpi->num_planes > 2){
+	mpi->stride[1]=(mpi->stride[0])>>1;
+	mpi->stride[2]=0;
+
+	mpi->planes[1] = mpi->planes[0] + w*mpi->height + 512;
+	mpi->planes[2] = mpi->planes[1] + w*mpi->chroma_height;
+	mpi->planes[3]= mpi->planes[2];
       } else {
-        // YV12,YVU9,IF09  (Y,V,U)
-        mpi->planes[2]=mpi->planes[0]+mpi->stride[0]*mpi->height;
-        mpi->planes[1]=mpi->planes[2]+mpi->stride[1]*mpi->chroma_height;
-        if (mpi->num_planes > 3)
-            mpi->planes[3]=mpi->planes[1]+mpi->stride[1]*mpi->chroma_height;
+	// NV12/NV21
+	mpi->stride[1]=(mpi->stride[0])>>1;
+	mpi->planes[1]=mpi->planes[0]+w*mpi->height;
       }
-    } else {
-      // NV12/NV21
-      mpi->stride[1]=mpi->chroma_width;
-      mpi->planes[1]=mpi->planes[0]+mpi->stride[0]*mpi->height;
+    }else{
+      int bpp = IMGFMT_IS_YUVP16(mpi->imgfmt)? 2 : 1;
+      // YV12/I420/YVU9/IF09. feel free to add other planar formats here...
+      mpi->stride[0]=mpi->stride[3]=bpp*mpi->width;
+      if(mpi->num_planes > 2){
+	mpi->stride[1]=mpi->stride[2]=bpp*mpi->chroma_width;
+	if(mpi->flags&MP_IMGFLAG_SWAPPED){
+	  // I420/IYUV  (Y,U,V)
+	  mpi->planes[1]=mpi->planes[0]+mpi->stride[0]*mpi->height;
+	  mpi->planes[2]=mpi->planes[1]+mpi->stride[1]*mpi->chroma_height;
+	  if (mpi->num_planes > 3)
+            mpi->planes[3]=mpi->planes[2]+mpi->stride[2]*mpi->chroma_height;
+	} else {
+	  // YV12,YVU9,IF09  (Y,V,U)
+	  mpi->planes[2]=mpi->planes[0]+mpi->stride[0]*mpi->height;
+	  mpi->planes[1]=mpi->planes[2]+mpi->stride[1]*mpi->chroma_height;
+	  if (mpi->num_planes > 3)
+            mpi->planes[3]=mpi->planes[1]+mpi->stride[1]*mpi->chroma_height;
+	}
+      } else {
+	// NV12/NV21
+	mpi->stride[1]=mpi->chroma_width;
+	mpi->planes[1]=mpi->planes[0]+mpi->stride[0]*mpi->height;
+      }
     }
   } else {
     mpi->stride[0]=mpi->width*mpi->bpp/8;
     if (mpi->flags & MP_IMGFLAG_RGB_PALETTE)
-      mpi->planes[1] = av_malloc(1024);
+      {
+#ifdef JZ_LINUX_OS
+	mpi->planes[1] = jz4740_alloc_frame(256,1024);
+#else
+	mpi->planes[1] = av_malloc(1024);
+#endif
+      }
   }
   mpi->flags|=MP_IMGFLAG_ALLOCATED;
 }
@@ -191,9 +311,12 @@ void free_mp_image(mp_image_t* mpi){
     if(!mpi) return;
     if(mpi->flags&MP_IMGFLAG_ALLOCATED){
 	/* becouse we allocate the whole image in once */
+#ifdef JZ_LINUX_OS
+#else
 	if(mpi->planes[0]) av_free(mpi->planes[0]);
 	if (mpi->flags & MP_IMGFLAG_RGB_PALETTE)
 	    av_free(mpi->planes[1]);
+#endif
     }
     free(mpi);
 }

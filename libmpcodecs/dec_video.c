@@ -306,7 +306,7 @@ static int init_video(sh_video_t *sh_video, char *codecname, char *vfm,
         if (sh_video->vf_initialized < 0)
             sh_video->vf_initialized = 0;
         if (!mpvdec->init(sh_video)) {
-            mp_msg(MSGT_DECVIDEO, MSGL_INFO, MSGTR_VDecoderInitFailed);
+	    mp_msg(MSGT_DECVIDEO, MSGL_INFO, MSGTR_VDecoderInitFailed);
             sh_video->disp_w = orig_w;
             sh_video->disp_h = orig_h;
             if (sh_video->bih) {

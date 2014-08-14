@@ -41,11 +41,12 @@ typedef struct vf_info_s {
 #define NUM_NUMBERED_MPI 50
 
 typedef struct vf_image_context_s {
-    mp_image_t* static_images[2];
-    mp_image_t* temp_images[1];
-    mp_image_t* export_images[1];
-    mp_image_t* numbered_images[NUM_NUMBERED_MPI];
-    int static_idx;
+  mp_image_t* static_images[2];
+  mp_image_t* temp_images[1];
+  mp_image_t* export_images[1];
+  mp_image_t* numbered_images[NUM_NUMBERED_MPI];
+  int static_idx;
+  int static_fix0, static_fix1;
 } vf_image_context_t;
 
 typedef struct vf_format_context_t {
@@ -165,5 +166,10 @@ static inline int norm_qscale(int qscale, int type)
     }
     return qscale;
 }
+
+#ifdef USE_JZ_IPU
+int jz47_put_image(struct vf_instance* vf,mp_image_t *mpi, double pts);
+void jz47_ipu_exit(void);
+#endif
 
 #endif /* MPLAYER_VF_H */

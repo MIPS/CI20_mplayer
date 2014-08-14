@@ -231,9 +231,11 @@ void vf_mpi_clear(mp_image_t* mpi,int x0,int y0,int w,int h){
 	y0&=~1;h+=h&1;
 	if(x0==0 && w==mpi->width){
 	    // full width clear:
+#if 0
 	    memset(mpi->planes[0]+mpi->stride[0]*y0,0,mpi->stride[0]*h);
 	    memset(mpi->planes[1]+mpi->stride[1]*(y0>>mpi->chroma_y_shift),128,mpi->stride[1]*(h>>mpi->chroma_y_shift));
 	    memset(mpi->planes[2]+mpi->stride[2]*(y0>>mpi->chroma_y_shift),128,mpi->stride[2]*(h>>mpi->chroma_y_shift));
+#endif
 	} else
 	for(y=y0;y<y0+h;y+=2){
 	    memset(mpi->planes[0]+x0+mpi->stride[0]*y,0,w);
@@ -308,6 +310,42 @@ mp_image_t* vf_get_image(vf_instance_t* vf, unsigned int outfmt, int mp_imgtype,
     if(!vf->imgctx.temp_images[0]) vf->imgctx.temp_images[0]=new_mp_image(w2,h);
     mpi=vf->imgctx.temp_images[0];
     break;
+#ifdef USE_IPU_THROUGH_MODE
+  case MP_IMGTYPE_IPB:
+  case MP_IMGTYPE_IP:
+    /* skip (I, P) or (P, P) frame since B Frame referenced */
+    //while (vf->imgctx.static_idx == vf->imgctx.static_fix0 || vf->imgctx.static_idx == vf->imgctx.static_fix1) {
+      if(vf->imgctx.static_images[vf->imgctx.static_idx])
+      {
+          
+          while ((get_disp_buf0() && vf->imgctx.static_images[vf->imgctx.static_idx]->planes[0] == get_disp_buf0())
+                 || (get_disp_buf1() && vf->imgctx.static_images[vf->imgctx.static_idx]->planes[0] == get_disp_buf1())
+		 || (get_disp_buf2() && vf->imgctx.static_images[vf->imgctx.static_idx]->planes[0] == get_disp_buf2())
+                || (vf->imgctx.static_idx == vf->imgctx.static_fix0 || vf->imgctx.static_idx == vf->imgctx.static_fix1 )) {
+              vf->imgctx.static_idx++;
+              if (vf->imgctx.static_idx >= USE_FBUF_NUM)
+                  vf->imgctx.static_idx = 0;
+          }
+      }
+      
+
+    if(!vf->imgctx.static_images[vf->imgctx.static_idx]) vf->imgctx.static_images[vf->imgctx.static_idx]=new_mp_image(w2,h);
+    mpi=vf->imgctx.static_images[vf->imgctx.static_idx];
+
+    /* roll fix buf (I,P or P,P) */
+    
+    if (mp_imgtype == MP_IMGTYPE_IP || (mp_imgflag&MP_IMGFLAG_READABLE))
+    {
+      vf->imgctx.static_fix0 = vf->imgctx.static_fix1;
+      vf->imgctx.static_fix1 = vf->imgctx.static_idx;
+    }
+    
+    /* Buf idx + 1  */
+    vf->imgctx.static_idx++;
+    if (vf->imgctx.static_idx >= USE_FBUF_NUM)
+      vf->imgctx.static_idx = 0;
+    break;
+#else
   case MP_IMGTYPE_IPB:
     if(!(mp_imgflag&MP_IMGFLAG_READABLE)){ // B frame:
       if(!vf->imgctx.temp_images[0]) vf->imgctx.temp_images[0]=new_mp_image(w2,h);
@@ -319,6 +357,7 @@ mp_image_t* vf_get_image(vf_instance_t* vf, unsigned int outfmt, int mp_imgtype,
     mpi=vf->imgctx.static_images[vf->imgctx.static_idx];
     vf->imgctx.static_idx^=1;
     break;
+#endif
   case MP_IMGTYPE_NUMBERED:
     if (number == -1) {
       int i;

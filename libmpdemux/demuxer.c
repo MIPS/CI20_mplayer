@@ -479,6 +479,9 @@ static void allocate_parser(AVCodecContext **avctx, AVCodecParserContext **parse
     case 0x86:
         codec_id = CODEC_ID_DTS;
         break;
+    case MKTAG('f', 'L', 'a', 'C'):
+        codec_id = CODEC_ID_FLAC;
+        break;
     case MKTAG('M', 'L', 'P', ' '):
         codec_id = CODEC_ID_MLP;
         break;
@@ -512,18 +515,23 @@ static void get_parser(sh_common_t *sh, AVCodecContext **avctx, AVCodecParserCon
 {
     *avctx  = NULL;
     *parser = NULL;
-
-    if (!sh || !sh->needs_parsing)
-        return;
+    if (!sh || !sh->needs_parsing){
+       return;
+    }
 
     *avctx  = sh->avctx;
     *parser = sh->parser;
-    if (*parser)
-        return;
+    if (*parser){        
+       return;
+    }
 
     allocate_parser(avctx, parser, sh->format);
     sh->avctx  = *avctx;
     sh->parser = *parser;
+    if (!*parser)
+    {
+	//printf("allocate_parser is invalid\n");
+    }
 }
 
 int ds_parse(demux_stream_t *ds, uint8_t **buffer, int *len, double pts, off_t pos)
@@ -531,8 +539,9 @@ int ds_parse(demux_stream_t *ds, uint8_t **buffer, int *len, double pts, off_t p
     AVCodecContext *avctx;
     AVCodecParserContext *parser;
     get_parser(ds->sh, &avctx, &parser);
-    if (!parser)
+    if (!parser){
         return *len;
+    }
     return av_parser_parse2(parser, avctx, buffer, len, *buffer, *len, pts, pts, pos);
 }
 
@@ -950,7 +959,8 @@ int get_demuxer_type_from_name(char *demuxer_name, int *force)
 int extension_parsing = 1; // 0=off 1=mixed (used only for unstable formats)
 
 int correct_pts = 0;
-int user_correct_pts = -1;
+//int user_correct_pts = -1;
+int user_correct_pts = 0;//by gjiwang
 
 /*
   NOTE : Several demuxers may be opened at the same time so
@@ -1113,6 +1123,14 @@ static demuxer_t *demux_open_stream(stream_t *stream, int file_format,
                sh_video->bih->biHeight, sh_video->bih->biBitCount,
                sh_video->fps, sh_video->i_bps * 0.008f,
                sh_video->i_bps / 1024.0f);
+
+	if (sh_video->bih->biWidth > 1280 || sh_video->bih->biHeight > 720) {
+	    av_log(NULL, AV_LOG_ERROR, "[ JZ4775 ] we can support up to 720P only!\n");
+	    return NULL;
+	} else if (sh_video->bih->biWidth == 0 || sh_video->bih->biHeight == 0) {
+	    av_log(NULL, AV_LOG_ERROR, "[ JZ4775 ] Detect no video resolution!\n");
+	}
+
     }
 #ifdef CONFIG_ASS
     if (ass_enabled && ass_library) {
@@ -1201,6 +1219,10 @@ demuxer_t *demux_open(stream_t *vs, int file_format, int audio_id,
         }
     }
 
+#if 0
+    mp_msg(NULL, NULL, "vs=%p, demuxer_type=%d, file_format=%d, demuxer_force=%d, audio_stream=%d, audio_id=%d,video_id=%d, sub_stream=%d, dvdsub_id=%d, filename=%s\n", 
+vs, demuxer_type, file_format, demuxer_force, audio_stream, audio_id, video_id, sub_stream, dvdsub_id, filename);
+#endif
     vd = demux_open_stream(vs, demuxer_type ? demuxer_type : file_format,
                            demuxer_force, audio_stream ? -2 : audio_id,
                            video_id, sub_stream ? -2 : dvdsub_id, filename);

@@ -23,7 +23,7 @@
 # Thanks to Melchior Franz of the FlightGear project for the original idea
 # of a source-tree checker and Torinthiel for the feedback along the way.
 
-# $Id$
+# $Id: checktree.sh,v 1.1.1.1 2012/03/27 04:02:57 dqliu Exp $
 
 # -----------------------------------------------------------------------------
 

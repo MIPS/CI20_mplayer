@@ -29,6 +29,7 @@
 #include "libmpdemux/stheader.h"
 #include "ad.h"
 
+#undef CONFIG_FAAD
 float drc_level = 1.0;
 
 /* Missed vorbis, mad, dshow */

@@ -1853,12 +1853,15 @@ static int check_image_pointers(uint8_t *data[4], enum PixelFormat pix_fmt,
                                 const int linesizes[4])
 {
     const AVPixFmtDescriptor *desc = &av_pix_fmt_descriptors[pix_fmt];
+    av_log("file:%s, func:%s, line:%d, desc->name = %s\b", __FILE__, __func__, __LINE__, desc->name);
     int i;
 
     for (i = 0; i < 4; i++) {
         int plane = desc->comp[i].plane;
-        if (!data[plane] || !linesizes[plane])
+        if (!data[plane] || !linesizes[plane]) {
+	    av_log("file:%s, func:%s, line:%d, i = %d\n", __FILE__, __func__, __LINE__, i);
             return 0;
+	}
     }
 
     return 1;
@@ -1872,13 +1875,16 @@ int sws_scale(SwsContext *c, const uint8_t* const src[], const int srcStride[], 
               int srcSliceH, uint8_t* const dst[], const int dstStride[])
 {
     int i;
+    av_log("file:%s, func:%s, line:%d\n", __FILE__, __func__, __LINE__);
     const uint8_t* src2[4]= {src[0], src[1], src[2], src[3]};
+    av_log("file:%s, func:%s, line:%d\n", __FILE__, __func__, __LINE__);
     uint8_t* dst2[4]= {dst[0], dst[1], dst[2], dst[3]};
 
     // do not mess up sliceDir if we have a "trailing" 0-size slice
     if (srcSliceH == 0)
         return 0;
 
+    av_log("file:%s, func:%s, line:%d\n", __FILE__, __func__, __LINE__);
     if (!check_image_pointers(src, c->srcFormat, srcStride)) {
         av_log(c, AV_LOG_ERROR, "bad src image pointers\n");
         return 0;
@@ -1958,6 +1964,7 @@ int sws_scale(SwsContext *c, const uint8_t* const src[], const int srcStride[], 
         }
     }
 
+    av_log("file:%s, func:%s, line:%d\n", __FILE__, __func__, __LINE__);
     // copy strides, so they can safely be modified
     if (c->sliceDir == 1) {
         // slices go from top to bottom
@@ -1994,6 +2001,7 @@ int sws_scale(SwsContext *c, const uint8_t* const src[], const int srcStride[], 
         if (!srcSliceY)
             c->sliceDir = 0;
 
+	av_log("file:%s, func:%s, line:%d\n", __FILE__, __func__, __LINE__);
         return c->swScale(c, src2, srcStride2, c->srcH-srcSliceY-srcSliceH, srcSliceH, dst2, dstStride2);
     }
 }

@@ -2,7 +2,7 @@
  * libdvdcss.h: private DVD reading library data
  *****************************************************************************
  * Copyright (C) 1998-2001 VideoLAN
- * $Id$
+ * $Id: libdvdcss.h,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
  *
  * Authors: Stéphane Borel <stef@via.ecp.fr>
  *          Sam Hocevar <sam@zoy.org>

@@ -1002,7 +1002,7 @@ got_video:
 		    }
 		}
 		// create new packet!
-		dp = new_demux_packet(sizeof(dp_hdr_t)+vpkg_length+8*(1+2*(vpkg_header&0x3F)));
+		dp = new_demux_packet(sizeof(dp_hdr_t)+(vpkg_length&0x0007FFFF)+8*(1+2*(vpkg_header&0x3F)));
 	    	// the timestamp seems to be in milliseconds
                 dp->pos = demuxer->filepos;
                 dp->flags = (flags & 0x2) ? 0x10 : 0;

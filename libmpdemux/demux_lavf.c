@@ -204,6 +204,7 @@ static int lavf_check_file(demuxer_t *demuxer){
     return DEMUXER_TYPE_LAVF;
 }
 
+#if 1
 static const char * const preferred_list[] = {
     "dxa",
     "flv",
@@ -222,6 +223,26 @@ static const char * const preferred_list[] = {
     "wv",
     NULL
 };
+#else
+static const char * const preferred_list[] = {
+    "dxa",
+    "flv",
+    "gxf",
+    "nut",
+    "nuv",
+    //"matroska,webm",
+    "mov,mp4,m4a,3gp,3g2,mj2",
+    "mpc",
+    "mpc8",
+    "mxf",
+    "ogg",
+    "swf",
+    "vqf",
+    "w64",
+    "wv",
+    NULL
+};
+#endif  //by xqliang
 
 static int lavf_check_preferred_file(demuxer_t *demuxer){
     if (lavf_check_file(demuxer)) {

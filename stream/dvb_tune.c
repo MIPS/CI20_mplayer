@@ -4,7 +4,7 @@
 
    Modified for use with MPlayer, for details see the changelog at
    http://svn.mplayerhq.hu/mplayer/trunk/
-   $Id$
+   $Id: dvb_tune.c,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License

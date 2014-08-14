@@ -4,7 +4,7 @@
                 xmlns="http://www.w3.org/TR/xhtml1/transitional"
                 exclude-result-prefixes="#default">
 
-<!-- $Id$  -->
+<!-- $Id: ldp-print.xsl,v 1.1.1.1 2012/03/27 04:02:57 dqliu Exp $  -->
 
 <!-- This stylesheet will eventually include print customizations
      from LDP.DSL.  At the current time, it has not been developed.-->

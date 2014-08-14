@@ -22,7 +22,7 @@
  *
  * Modified for use with MPlayer, see libmpeg2_changes.diff for the exact changes.
  * detailed changelog at http://svn.mplayerhq.hu/mplayer/trunk/
- * $Id$
+ * $Id: idct.c,v 1.1.1.1 2012/03/27 04:02:57 dqliu Exp $
  */
 
 #include "config.h"
@@ -287,6 +287,8 @@ void mpeg2_idct_init (uint32_t accel)
 
 	mpeg2_idct_copy = mpeg2_idct_copy_c;
 	mpeg2_idct_add = mpeg2_idct_add_c;
+#ifdef JZC_MXU_OPT
+#else
 	for (i = -3840; i < 3840 + 256; i++)
 	    CLIP(i) = (i < 0) ? 0 : ((i > 255) ? 255 : i);
 	for (i = 0; i < 64; i++) {
@@ -295,5 +297,6 @@ void mpeg2_idct_init (uint32_t accel)
 	    j = mpeg2_scan_alt[i];
 	    mpeg2_scan_alt[i] = ((j & 0x36) >> 1) | ((j & 0x09) << 2);
 	}
+#endif
     }
 }

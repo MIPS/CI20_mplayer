@@ -472,8 +472,7 @@ static int demux_audio_open(demuxer_t* demuxer) {
 	    }
 	}
 	if (sh_audio->format == 0x2001)
-	    mp_msg(MSGT_DEMUX,MSGL_DBG2,"[demux_audio] DTS sync offset = %u\n", i);
-
+	  mp_msg(MSGT_DEMUX,MSGL_DBG2,"[demux_audio] DTS sync offset = %u\n", i);
     }
     stream_seek(s,demuxer->movi_start);
   } break;
@@ -495,6 +494,7 @@ static int demux_audio_open(demuxer_t* demuxer) {
 	    }
 	    if (sh_audio->i_bps < 1) // guess value to prevent crash
 	      sh_audio->i_bps = 64 * 1024;
+	    sh_audio->needs_parsing = 1;
 //	    get_flac_metadata (demuxer);
 	    break;
   }

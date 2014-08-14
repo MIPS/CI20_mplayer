@@ -7,7 +7,7 @@ The latest version can be found at http://www.linuxstb.org/dvbstream
 
 Modified for use with MPlayer, for details see the changelog at
 http://svn.mplayerhq.hu/mplayer/trunk/
-$Id$
+$Id: stream_dvb.c,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
 
 Copyright notice:
 

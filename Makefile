@@ -20,7 +20,6 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 include config.mak
-
 ###### variable declarations #######
 
 SRCS_AUDIO_INPUT-$(ALSA1X)           += stream/ai_alsa1x.c
@@ -522,6 +521,20 @@ SRCS_COMMON = asxparser.c \
               stream/stream_mf.c \
               stream/stream_null.c \
               stream/url.c \
+              jz47_vae_map.c\
+              jz47_soc_mem.c\
+              libjzipu/jz47_soc_rsize.c\
+              libjzipu/jzipu_base.c\
+              libjzipu/jz47_sw_render.c\
+              libjzipu/jz47xx_ipu.c\
+              libjzipu/jz4780_ipu.c\
+              libjzipu/jz4780_x2d.c\
+	      libjzipu/jz4780_ipu_hal/generate_ipu_table.c \
+	      libjzipu/jz4780_ipu_hal/jz_ipu.c \
+	      libjzipu/jz4780_ipu_hal/jz_ipu_table.c \
+	      libjzipu/jz4780_ipu_hal/jz_ipu_table_const.c \
+	      libjzipu/jz4780_ipu_hal/dmmu.c \
+	      libjzipu/jz4780_x2d_hal/x2d.c \
               $(SRCS_COMMON-yes)
 
 
@@ -724,6 +737,12 @@ COMMON_LIBS-$(LIBAVCORE_A)        += libavcore/libavcore.a
 COMMON_LIBS-$(LIBAVUTIL_A)        += libavutil/libavutil.a
 COMMON_LIBS-$(LIBPOSTPROC_A)      += libpostproc/libpostproc.a
 COMMON_LIBS-$(LIBSWSCALE_A)       += libswscale/libswscale.a
+COMMON_LIBS-$(LIBAVCODEC_A)       += libvc1/libvc1.a
+COMMON_LIBS-$(LIBAVCODEC_A)       += librv9/librv9.a
+COMMON_LIBS-$(LIBAVCODEC_A)       += libmpeg4/libmpeg4.a
+COMMON_LIBS-$(LIBAVCODEC_A)       += libh264/libh264.a
+COMMON_LIBS-$(LIBAVCODEC_A)       += libvp8/libvp8.a
+COMMON_LIBS-$(LIBAVCODEC_A)       += libmad/libmad.a
 COMMON_LIBS += $(COMMON_LIBS-yes)
 
 OBJS_COMMON    += $(addsuffix .o, $(basename $(SRCS_COMMON)))
@@ -731,6 +750,11 @@ OBJS_MENCODER  += $(addsuffix .o, $(basename $(SRCS_MENCODER)))
 OBJS_MPLAYER   += $(addsuffix .o, $(basename $(SRCS_MPLAYER)))
 OBJS_MPLAYER-$(PE_EXECUTABLE) += osdep/mplayer-rc.o
 OBJS_MPLAYER   += $(OBJS_MPLAYER-yes)
+
+# H264_CAVLC_P1_BIN=h264_cavlc_p1.bin
+# H264_CABAC_P1_BIN=h264_p1.bin
+H264_P1_BIN = $(H264_CAVLC_P1_BIN) + $(H264_CABAC_P1_BIN)
+
 
 MENCODER_DEPS = $(OBJS_MENCODER) $(OBJS_COMMON) $(COMMON_LIBS)
 MPLAYER_DEPS  = $(OBJS_MPLAYER)  $(OBJS_COMMON) $(COMMON_LIBS)
@@ -781,7 +805,6 @@ DIRS =  . \
         libmpcodecs \
         libmpcodecs/native \
         libmpdemux \
-        libmpeg2 \
         libpostproc \
         libswscale \
         libswscale/bfin \
@@ -804,7 +827,20 @@ DIRS =  . \
         TOOLS \
         vidix \
 
+DIRS += libjzipu \
+	libjzipu/jz4780_ipu_hal \
+	libjzipu/jz4780_x2d_hal \
+	libvc1 \
+        libh264 \
+	librv9 \
+        libmpeg4 \
+        libvp8 \
+        libmpeg2 \
+	libmad \
+	libmad/libmad-0.15.1b \
+
 ALLHEADERS = $(foreach dir,$(DIRS),$(wildcard $(dir)/*.h))
+all:	$(ALL_PRG) 
 
 ADDSUFFIXES     = $(foreach suf,$(1),$(addsuffix $(suf),$(2)))
 ADD_ALL_DIRS    = $(call ADDSUFFIXES,$(1),$(DIRS))
@@ -817,13 +853,17 @@ FFMPEGPARTS = libavcodec \
               libpostproc \
               libswscale \
 
+FFMPEGPARTS +=libvc1 \
+	      libh264 \
+	      librv9 \
+              libmpeg4 \
+	      libvp8 \
+	      libmad \
+
 FFMPEGLIBS  = $(foreach part, $(FFMPEGPARTS), $(part)/$(part).a)
 FFMPEGFILES = $(foreach part, $(FFMPEGPARTS), $(wildcard $(part)/*.[chS] $(part)/*/*.[chS]))
 
-
-
 ###### generic rules #######
-
 all: $(ALL_PRG-yes)
 
 %.o: %.S
@@ -849,8 +889,12 @@ mencoder$(EXESUF): $(MENCODER_DEPS)
 mencoder$(EXESUF): EXTRALIBS += $(EXTRALIBS_MENCODER)
 mplayer$(EXESUF): $(MPLAYER_DEPS)
 mplayer$(EXESUF): EXTRALIBS += $(EXTRALIBS_MPLAYER)
-mencoder$(EXESUF) mplayer$(EXESUF):
+
+mencoder$(EXESUF):
 	$(CC) -o $@ $^ $(EXTRALIBS)
+
+mplayer$(EXESUF):
+	$(CC) -Xlinker -T -Xlinker linux_mp.ld -o $@ $^ $(EXTRALIBS)
 
 codec-cfg$(EXESUF): codec-cfg.c codec-cfg.h help_mp.h
 	$(HOST_CC) -O -DCODECS2HTML -I. -o $@ $<
@@ -893,7 +937,7 @@ $(call ADDSUFFIXES,.d .o,mpcommon osdep/mplayer.rc): version.h
 
 osdep/mplayer-rc.o: osdep/mplayer.exe.manifest
 
-gui/%: CFLAGS += -Wno-strict-prototypes
++gui/%: CFLAGS += -Wa,--noexecstack,-Wno-strict-prototypes
 
 libdvdcss/%:   CFLAGS := -Ilibdvdcss -D__USE_UNIX98 -D_GNU_SOURCE -DVERSION=\"1.2.10\" $(CFLAGS_LIBDVDCSS) $(CFLAGS)
 libdvdnav/%:   CFLAGS := -Ilibdvdnav -D__USE_UNIX98 -D_GNU_SOURCE -DHAVE_CONFIG_H -DVERSION=\"MPlayer-custom\" $(CFLAGS)
@@ -985,16 +1029,19 @@ uninstall:
 	rm -f $(foreach lang,$(MAN_LANGS),$(foreach man,mplayer.1 mencoder.1,$(MANDIR)/$(lang)/man1/$(man)))
 
 clean:
-	-rm -f $(call ADD_ALL_DIRS,/*.o /*.a /*.ho /*~)
+	-rm -f $(call ADD_ALL_DIRS,/*.s /*.mid /*.o /*.a /*.ho /*~ /*.mid)
 	-rm -f $(call ADD_ALL_EXESUFS,mplayer mencoder)
+	for dir in $(FFMPEGPARTS); do make -C $$dir clean; done
 
-distclean: clean testsclean toolsclean driversclean dhahelperclean dhahelperwinclean
+genclean:
+	$(MAKE) -C libavcodec/ genclean
+
+distclean: clean testsclean toolsclean driversclean dhahelperclean dhahelperwinclean genclean
 	-rm -rf DOCS/tech/doxygen
 	-rm -f $(call ADD_ALL_DIRS,/*.d)
-	-rm -f config.log config.mak config.h codecs.conf.h help_mp.h \
-           version.h $(VIDIX_PCI_FILES) TAGS tags
+	-rm -f help_mp.h version.h $(VIDIX_PCI_FILES) TAGS tags
 	-rm -f $(call ADD_ALL_EXESUFS,codec-cfg cpuinfo)
-	-rm -f libavutil/avconfig.h
+	-rm -rf libavcodec/costablegen *.bin
 
 doxygen:
 	doxygen DOCS/tech/Doxyfile
@@ -1158,7 +1205,7 @@ dhahelperwinclean:
 
 -include $(DEPS)
 
-.PHONY: all doxygen *install* *tools drivers dhahelper*
+.PHONY: all doxygen *install* *tools drivers dhahelper* h264_clean p0_clean p1_clean h264
 .PHONY: checkheaders *clean tests
 
 # Disable suffix rules.  Most of the builtin rules are suffix rules,

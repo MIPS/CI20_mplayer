@@ -1,5 +1,5 @@
 /*
- * $Id$
+ * $Id: bsdi_dvd.h,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
 */
 
 #ifndef	DVDCSS_DVD_H

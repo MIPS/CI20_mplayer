@@ -31,6 +31,18 @@
 #include "attributes.h"
 #include "mpeg2_internal.h"
 
+#include "mpeg2_config.h"
+#ifdef JZC_MXU_OPT
+#include "../libjzcommon/jzasm.h"
+#include "../libjzcommon/jzmedia.h"
+#endif
+
+#ifdef MPEG2_SCH_CONTROL
+#include "soc/mpeg2_dcore.h"
+volatile unsigned char * vdma_base;
+volatile unsigned int * bs_data;
+#endif
+
 static int mpeg2_accels = 0;
 
 #define BUFFER_SIZE (1194 * 1024)
@@ -149,6 +161,26 @@ mpeg2_state_t mpeg2_seek_header (mpeg2dec_t * mpeg2dec)
 
 #define RECEIVED(code,state) (((state) << 8) + (code))
 
+static void prin_crc(const char * src_y, const char * src_uv, int mb_num)
+{
+    unsigned char * crc_y = src_y;
+    unsigned char * crc_uv = src_uv;
+    int i, j;
+    for(i = 0; i < mb_num; i++){
+      printf("--------------- block : %d -----------------\n", i);
+      printf("---------------- Y -------------------------\n");
+      for(j = 0; j < 16; j++)
+        printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n", crc_y[0], crc_y[1], crc_y[2], crc_y[3], crc_y[4], crc_y[5], crc_y[6], crc_y[7], crc_y[8], crc_y[9], crc_y[10], crc_y[11], crc_y[12], crc_y[13], crc_y[14], crc_y[15]);
+      crc_y += 256;
+      printf("---------------- C -------------------------\n");
+      for(j = 0; j < 8; j++)
+        printf("%2x %2x %2x %2x %2x %2x %2x %2x ** %2x %2x %2x %2x %2x %2x %2x %2x\n", crc_uv[0], crc_uv[1], crc_uv[2], crc_uv[3], crc_uv[4], crc_uv[5], crc_uv[6], crc_uv[7], crc_uv[8], crc_uv[9], crc_uv[10], crc_uv[11], crc_uv[12], crc_uv[13], crc_uv[14], crc_uv[15]);
+      crc_uv += 128;
+    }
+}
+
+int save_copied;
+extern int frame_num;
 mpeg2_state_t mpeg2_parse (mpeg2dec_t * mpeg2dec)
 {
     int size_buffer, size_chunk, copied;
@@ -183,13 +215,17 @@ mpeg2_state_t mpeg2_parse (mpeg2dec_t * mpeg2dec)
 		    return STATE_INVALID;
 		}
 	    }
+            save_copied = copied;
 	    mpeg2dec->bytes_since_tag += copied;
 
+            /* decode a slice */
 	    mpeg2_slice (&(mpeg2dec->decoder), mpeg2dec->code,
 			 mpeg2dec->chunk_start);
 	    mpeg2dec->code = mpeg2dec->buf_start[-1];
 	    mpeg2dec->chunk_ptr = mpeg2dec->chunk_start;
 	}
+/*         mpeg2_decoder_t * const decoder = &(mpeg2dec->decoder); */
+/*         prin_crc(decoder->picture_dest[0], decoder->picture_dest[1], (decoder->stride_frame>>4) * (decoder->height>>4)); */
 	if ((unsigned) (mpeg2dec->code - 1) >= 0xb0 - 1)
 	    break;
 	if (seek_chunk (mpeg2dec) == STATE_BUFFER)
@@ -415,6 +451,8 @@ void mpeg2_reset (mpeg2dec_t * mpeg2dec, int full_reset)
 
 }
 
+
+extern int frame_num;
 mpeg2dec_t * mpeg2_init (void)
 {
     mpeg2dec_t * mpeg2dec;
@@ -429,18 +467,38 @@ mpeg2dec_t * mpeg2_init (void)
     memset (mpeg2dec->decoder.DCTblock, 0, 64 * sizeof (int16_t));
     memset (mpeg2dec->quantizer_matrix, 0, 4 * 64 * sizeof (uint8_t));
 
+#ifdef MPEG2_SCH_CONTROL_n
+    mpeg2dec->chunk_buffer = (uint8_t *) jz4740_alloc_frame( 4, BUFFER_SIZE + 4);
+    printf("chunk_buffer = %x\n", mpeg2dec->chunk_buffer);
+#else
     mpeg2dec->chunk_buffer = (uint8_t *) mpeg2_malloc (BUFFER_SIZE + 4,
 						       MPEG2_ALLOC_CHUNK);
-
+#endif
     mpeg2dec->sequence.width = (unsigned)-1;
     mpeg2_reset (mpeg2dec, 1);
 
+#ifdef JZC_MXU_OPT
+    S32I2M(xr16, 0x3);
+#endif
+
+    frame_num = 0;
+#ifdef MPEG2_SCH_CONTROL
+    printf("---------------- mpeg2_ACFG_config malloc ---------------\n");
+    vdma_base = (uint8_t *) jz4740_alloc_frame(128, 0x2000);
+    memset(vdma_base, 0, 0x2000);
+    bs_data = (uint8_t *) jz4740_alloc_frame(4, BUFFER_SIZE + 4);
+#endif
+
     return mpeg2dec;
 }
+
 
 void mpeg2_close (mpeg2dec_t * mpeg2dec)
 {
     mpeg2_header_state_init (mpeg2dec);
     mpeg2_free (mpeg2dec->chunk_buffer);
     mpeg2_free (mpeg2dec);
+#ifdef MPEG2_SCH_CONTROL
+    mpeg2_free (vdma_base);
+#endif
 }

@@ -20,7 +20,7 @@
 ** forbidden.
 **
 ** Initially modified for use with MPlayer by Rich Felker on 2005/03/29
-** $Id$
+** $Id: output.c,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
 ** detailed changelog at http://svn.mplayerhq.hu/mplayer/trunk/
 **/
 

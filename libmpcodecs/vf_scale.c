@@ -394,13 +394,18 @@ static void scale(struct SwsContext *sws1, struct SwsContext *sws2, uint8_t *src
         int src_stride2[MP_MAX_PLANES]={2*src_stride[0], 2*src_stride[1], 2*src_stride[2], 2*src_stride[3]};
         int dst_stride2[MP_MAX_PLANES]={2*dst_stride[0], 2*dst_stride[1], 2*dst_stride[2], 2*dst_stride[3]};
 
+	printf("file:%s, func:%s, line:%d\n", __FILE__, __func__, __LINE__);
         sws_scale(sws1, src2, src_stride2, y>>1, h>>1, dst2, dst_stride2);
         for(i=0; i<MP_MAX_PLANES; i++){
             src2[i] += src_stride[i];
             dst2[i] += dst_stride[i];
         }
+	printf("file:%s, func:%s, line:%d\n", __FILE__, __func__, __LINE__);
         sws_scale(sws2, src2, src_stride2, y>>1, h>>1, dst2, dst_stride2);
     }else{
+	printf("file:%s, func:%s, line:%d\n", __FILE__, __func__, __LINE__);
+	printf("sws1=%p, src2=%p, src_stride=%d, y=%d, h=%d, dst=%p, dst_stride=%p\n", 
+		sws1, src2, src_stride, y, h, dst, dst_stride);
         sws_scale(sws1, src2, src_stride, y, h, dst, dst_stride);
     }
 }
@@ -556,6 +561,10 @@ static int query_format(struct vf_instance *vf, unsigned int fmt){
 }
 
 static void uninit(struct vf_instance *vf){
+
+#ifdef USE_JZ_IPU
+    jz47_ipu_exit();
+#endif
     if(vf->priv->ctx) sws_freeContext(vf->priv->ctx);
     if(vf->priv->ctx2) sws_freeContext(vf->priv->ctx2);
     if(vf->priv->palette) free(vf->priv->palette);
@@ -565,8 +574,13 @@ static void uninit(struct vf_instance *vf){
 static int vf_open(vf_instance_t *vf, char *args){
     vf->config=config;
     vf->start_slice=start_slice;
+#ifdef USE_JZ_IPU
+    vf->draw_slice=NULL;
+    vf->put_image=jz47_put_image;
+#else
     vf->draw_slice=draw_slice;
     vf->put_image=put_image;
+#endif
     vf->query_format=query_format;
     vf->control= control;
     vf->uninit=uninit;

@@ -41,6 +41,14 @@
 /* sub_cc (closed captions)*/
 #include "sub_cc.h"
 
+#ifdef USE_LIBAVCODEC_SO
+#include <ffmpeg/avcodec.h>
+#elif defined(USE_LIBAVCODEC)
+#include "libavcodec/avcodec.h"
+#else
+#define FF_INPUT_BUFFER_PADDING_SIZE 8
+#endif
+
 /* biCompression constant */
 #define BI_RGB        0L
 
@@ -52,6 +60,11 @@ static mp_mpeg_header_t picture;
 
 static int telecine=0;
 static float telecine_cnt=-2.5;
+
+#if defined(USE_JZ_IPU) && defined(JZC_BS_HW_OPT)
+extern void *jz4740_alloc_frame (int align, int size);
+#define memalign jz4740_alloc_frame
+#endif
 
 typedef enum {
   VIDEO_MPEG12,
@@ -106,6 +119,17 @@ video_codec_t video_codec = find_video_codec(sh_video);
 // Determine image properties:
 switch(video_codec){
  case VIDEO_OTHER: {
+#if defined(USE_JZ_IPU) && defined(JZC_BS_HW_OPT)
+   if(!videobuffer) {
+     videobuffer=(char*)memalign(8,VIDEOBUFFER_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
+     if (videobuffer) memset(videobuffer+VIDEOBUFFER_SIZE, 0, FF_INPUT_BUFFER_PADDING_SIZE);
+     else {
+       mp_msg(NULL,NULL," !! alloc videobuffer failed !! \n");
+       return 0;
+     }
+   }
+#endif // defined(USE_JZ_IPU) && defined(JZC_BS_HW_OPT)
+
  if((d_video->demuxer->file_format == DEMUXER_TYPE_ASF) || (d_video->demuxer->file_format == DEMUXER_TYPE_AVI)) {
     // display info:
     // in case no strf chunk has been seen in avi, we have no bitmap header
@@ -548,8 +572,9 @@ int video_read_frame(sh_video_t* sh_video,float* frame_time_ptr,unsigned char** 
               // assuming arbitrary slice ordering is not allowed, the
               // first_mb_in_slice (golomb encoded) value should be 0 then
               // for the first VCL NAL in a picture
-              if (demux_peekc(d_video) & 0x80)
+              if (demux_peekc(d_video) & 0x80){
                 break;
+	      }
             }
           }
         }
@@ -569,6 +594,10 @@ int video_read_frame(sh_video_t* sh_video,float* frame_time_ptr,unsigned char** 
       // frame-based file formats: (AVI,ASF,MOV)
     in_size=ds_get_packet(d_video,start);
     if(in_size<0) return -1; // EOF
+#if defined(USE_JZ_IPU) && defined(JZC_BS_HW_OPT)
+    fast_memcpy(videobuffer,*start,in_size);
+    *start = videobuffer;
+#endif
   }
 
 
@@ -649,3 +678,7 @@ int video_read_frame(sh_video_t* sh_video,float* frame_time_ptr,unsigned char** 
     if(frame_time_ptr) *frame_time_ptr=frame_time;
     return in_size;
 }
+
+#if defined(USE_JZ_IPU) && defined(JZC_BS_HW_OPT)
+#undef memalign
+#endif

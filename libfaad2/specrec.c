@@ -20,7 +20,7 @@
 ** forbidden.
 **
 ** Initially modified for use with MPlayer on 2006/04/18
-** $Id: specrec.c,v 1.56 2004/09/08 09:43:11 gcp Exp $
+** $Id: specrec.c,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
 ** detailed changelog at http://svn.mplayerhq.hu/mplayer/trunk/
 ** local_changes.diff contains the exact changes to this file.
 **/

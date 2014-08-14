@@ -11,7 +11,7 @@
  ********************************************************************
 
   function: packing variable sized words into an octet stream
-  last mod: $Id$
+  last mod: $Id: bitwise.c,v 1.1.1.1 2012/03/27 04:02:57 dqliu Exp $
 
  ********************************************************************/
 

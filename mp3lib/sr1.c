@@ -63,7 +63,7 @@ int mp3_read(char *buf,int size);
 /*
  * Modified for use with MPlayer, for details see the changelog at
  * http://svn.mplayerhq.hu/mplayer/trunk/
- * $Id$
+ * $Id: sr1.c,v 1.1.1.1 2012/03/27 04:02:57 dqliu Exp $
  */
 
 

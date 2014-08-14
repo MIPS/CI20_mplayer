@@ -689,8 +689,9 @@ static int init(sh_video_t *sh)
 	xa_close_func[i] = NULL;
 
     snprintf(dll, 1024, "%s/%s", codec_path, sh->codec->dll);
-    if (xacodec_load(sh, dll) == 0)
+    if (xacodec_load(sh, dll) == 0) {
 	return 0;
+    }
 
     codec_hdr.xapi_rev = XAVID_API_REV;
     codec_hdr.anim_hdr = malloc(4096);

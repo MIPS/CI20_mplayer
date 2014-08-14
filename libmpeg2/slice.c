@@ -23,16 +23,30 @@
  *
  * Modified for use with MPlayer, see libmpeg2_changes.diff for the exact changes.
  * detailed changelog at http://svn.mplayerhq.hu/mplayer/trunk/
- * $Id$
+ * $Id: slice.c,v 1.2 2012/09/10 03:49:03 kznan Exp $
  */
 
 #include "config.h"
+#include <stdio.h>
 
 #include <inttypes.h>
 
 #include "mpeg2.h"
 #include "attributes.h"
 #include "mpeg2_internal.h"
+
+/* **************************** HW ******************************* */
+
+#include "mpeg2_config.h"
+#include "../libjzcommon/jzasm.h"
+#ifdef JZC_MXU_OPT
+#include "../libjzcommon/jzasm.h"
+#include "../libjzcommon/jzmedia.h"
+#define i_noreorder  ({  __asm__ __volatile__(".set noreorder"); })
+#define i_reorder  ({  __asm__ __volatile__(".set reorder"); })
+uint8_t idct_row_max,idct_row_max_intra;
+#include "mpeg2_idct_mxu.c"
+#endif
 
 extern mpeg2_mc_t mpeg2_mc;
 extern void (* mpeg2_idct_copy) (int16_t * block, uint8_t * dest, int stride);
@@ -136,6 +150,10 @@ static inline int get_macroblock_modes (mpeg2_decoder_t * const decoder)
 #undef bit_ptr
 }
 
+#ifdef MPEG2_SCH_CONTROL
+static int save_qs_code;
+#endif
+
 static inline void get_quantizer_scale (mpeg2_decoder_t * const decoder)
 {
 #define bit_buf (decoder->bitstream_buf)
@@ -145,6 +163,9 @@ static inline void get_quantizer_scale (mpeg2_decoder_t * const decoder)
     int quantizer_scale_code;
 
     quantizer_scale_code = UBITS (bit_buf, 5);
+#ifdef MPEG2_SCH_CONTROL
+    save_qs_code = quantizer_scale_code;
+#endif
     DUMPBITS (bit_buf, bits, 5);
     decoder->quantizer_scale = decoder->quantizer_scales[quantizer_scale_code];
 
@@ -282,7 +303,11 @@ static inline int get_luma_dc_dct_diff (mpeg2_decoder_t * const decoder)
 	    dc_diff =
 		UBITS (bit_buf, size) - UBITS (SBITS (~bit_buf, 1), size);
 	    bit_buf <<= size;
+#ifdef JZC_MXU_OPT
+            return dc_diff;
+#else
 	    return dc_diff << decoder->intra_dc_precision;
+#endif
 	} else {
 	    DUMPBITS (bit_buf, bits, 3);
 	    return 0;
@@ -294,7 +319,11 @@ static inline int get_luma_dc_dct_diff (mpeg2_decoder_t * const decoder)
 	NEEDBITS (bit_buf, bits, bit_ptr);
 	dc_diff = UBITS (bit_buf, size) - UBITS (SBITS (~bit_buf, 1), size);
 	DUMPBITS (bit_buf, bits, size);
+#ifdef JZC_MXU_OPT
+        return dc_diff;
+#else
 	return dc_diff << decoder->intra_dc_precision;
+#endif
     }
 #undef bit_buf
 #undef bits
@@ -319,7 +348,11 @@ static inline int get_chroma_dc_dct_diff (mpeg2_decoder_t * const decoder)
 	    dc_diff =
 		UBITS (bit_buf, size) - UBITS (SBITS (~bit_buf, 1), size);
 	    bit_buf <<= size;
+#ifdef JZC_MXU_OPT
+            return dc_diff;
+#else
 	    return dc_diff << decoder->intra_dc_precision;
+#endif
 	} else {
 	    DUMPBITS (bit_buf, bits, 2);
 	    return 0;
@@ -331,20 +364,35 @@ static inline int get_chroma_dc_dct_diff (mpeg2_decoder_t * const decoder)
 	NEEDBITS (bit_buf, bits, bit_ptr);
 	dc_diff = UBITS (bit_buf, size) - UBITS (SBITS (~bit_buf, 1), size);
 	DUMPBITS (bit_buf, bits, size);
+#ifdef JZC_MXU_OPT
+        return dc_diff;
+#else
 	return dc_diff << decoder->intra_dc_precision;
+#endif
     }
 #undef bit_buf
 #undef bits
 #undef bit_ptr
 }
 
+#ifdef JZC_MXU_OPT
+#define SATURATE(val)                           \
+do {                                            \
+    val <<= 4;                                  \
+    if (unlikely (val != (int16_t) val))        \
+        val = (SBITS (val, 1) ^ 2047) << 4;     \
+    val >>= 4;                                  \
+} while (0)
+#else
 #define SATURATE(val)				\
 do {						\
     val <<= 4;					\
     if (unlikely (val != (int16_t) val))	\
 	val = (SBITS (val, 1) ^ 2047) << 4;	\
 } while (0)
+#endif
 
+#ifdef JZC_MXU_OPT
 static void get_intra_block_B14 (mpeg2_decoder_t * const decoder,
 				 const uint16_t * const quant_matrix)
 {
@@ -359,6 +407,158 @@ static void get_intra_block_B14 (mpeg2_decoder_t * const decoder,
     const uint8_t * bit_ptr;
     int16_t * const dest = decoder->DCTblock;
 
+    S32CPS(xr11, xr0, xr0);   
+    i = 0;
+    mismatch = ~dest[0];
+
+    bit_buf = decoder->bitstream_buf;
+    bits = decoder->bitstream_bits;
+    bit_ptr = decoder->bitstream_ptr;
+
+    NEEDBITS (bit_buf, bits, bit_ptr);
+
+    while (1) {
+        int32_t my_run, my_len, my_lvl, tmp;
+	if (bit_buf >= 0x28000000) {
+	    tab = DCT_B14AC_5 + (UBITS (bit_buf, 5) - 5);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level; 
+	    i += my_run;
+	    i_reorder;
+	    if (i >= 64)
+		break;	/* end of block */
+
+	normal_code:
+	    i_noreorder;
+	    j = scan[i];
+	    bit_buf <<= my_len;
+	    bits += my_len + 1;
+	    val = quant_matrix[j];
+            S32I2M(xr10, j);
+	    tmp = my_lvl;
+            val *= tmp;
+            S32MAX(xr11, xr11, xr10);
+            tmp = SBITS (bit_buf, 1);
+            val >>= 4;
+            val = (val ^ tmp) - tmp;
+            i_reorder;
+
+	    SATURATE (val);
+	    dest[j] = val;
+	    mismatch ^= val;
+
+	    bit_buf <<= 1;
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+	    continue;
+
+	} else if (bit_buf >= 0x04000000) {
+	    tab = DCT_B14_8 + (UBITS (bit_buf, 8) - 4);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder;
+	    if (i < 64)
+		goto normal_code;
+
+	    /* escape code */
+
+	    i += UBITS (bit_buf << 6, 6) - 64;
+	    if (i >= 64)
+		break;	/* illegal, check needed to avoid buffer overflow */
+
+            i_noreorder;
+	    j = scan[i];
+
+	    DUMPBITS (bit_buf, bits, 12);
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+            tmp = quant_matrix[j];
+            S32I2M(xr10, j);
+            val = SBITS (bit_buf, 12);
+            val *= tmp;
+            S32MAX(xr11, xr11, xr10);
+            val >>= 4;
+            i_reorder; 
+
+	    SATURATE (val);
+	    dest[j] = val;
+	    mismatch ^= val;
+
+	    DUMPBITS (bit_buf, bits, 12);
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+
+	    continue;
+
+	} else if (bit_buf >= 0x02000000) {
+	    tab = DCT_B14_10 + (UBITS (bit_buf, 10) - 8);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00800000) {
+	    tab = DCT_13 + (UBITS (bit_buf, 13) - 16);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder; 
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00200000) {
+	    tab = DCT_15 + (UBITS (bit_buf, 15) - 16);
+	    i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else {
+	    tab = DCT_16 + UBITS (bit_buf, 16);
+	    bit_buf <<= 16;
+	    GETWORD (bit_buf, bits + 16, bit_ptr);
+	    i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	}
+	break;	/* illegal, check needed to avoid buffer overflow */
+    }
+    val = S32M2I(xr11);
+    dest[63] ^= mismatch & 1;
+    DUMPBITS (bit_buf, bits, 2);	/* dump end of block code */
+    decoder->bitstream_buf = bit_buf;
+    decoder->bitstream_bits = bits;
+    decoder->bitstream_ptr = bit_ptr;
+    idct_row_max_intra = (val>>3) + 1;
+}
+#else
+static void get_intra_block_B14 (mpeg2_decoder_t * const decoder,
+				 const uint16_t * const quant_matrix)
+{
+    int i;
+    int j;
+    int val;
+    const uint8_t * const scan = decoder->scan;
+    int mismatch;
+    const DCTtab * tab;
+    uint32_t bit_buf;
+    int bits;
+    const uint8_t * bit_ptr;
+    int16_t * const dest = decoder->DCTblock;
+   
     i = 0;
     mismatch = ~dest[0];
 
@@ -455,7 +655,157 @@ static void get_intra_block_B14 (mpeg2_decoder_t * const decoder,
     decoder->bitstream_bits = bits;
     decoder->bitstream_ptr = bit_ptr;
 }
+#endif
 
+#ifdef JZC_MXU_OPT
+static void get_intra_block_B15 (mpeg2_decoder_t * const decoder,
+				 const uint16_t * const quant_matrix)
+{
+    int i;
+    int j;
+    int val;
+    const uint8_t * const scan = decoder->scan;
+    int mismatch;
+    const DCTtab * tab;
+    uint32_t bit_buf;
+    int bits;
+    const uint8_t * bit_ptr;
+    int16_t * const dest = decoder->DCTblock;
+
+    S32CPS(xr11, xr0, xr0);
+    i = 0;
+    mismatch = ~dest[0];
+
+    bit_buf = decoder->bitstream_buf;
+    bits = decoder->bitstream_bits;
+    bit_ptr = decoder->bitstream_ptr;
+
+    NEEDBITS (bit_buf, bits, bit_ptr);
+
+    while (1) {
+        int32_t my_run, my_len, my_lvl, tmp;
+	if (bit_buf >= 0x04000000) {
+	    tab = DCT_B15_8 + (UBITS (bit_buf, 8) - 4);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+            i_reorder;
+	    if (i < 64) {
+
+	    normal_code:
+	        i_noreorder;
+		j = scan[i];
+		bit_buf <<= my_len;
+		bits += my_len + 1;
+                val = quant_matrix[j];
+                S32I2M(xr10, j);
+                tmp =  my_lvl;
+                val *= tmp;
+                S32MAX(xr11, xr11, xr10);
+                tmp = SBITS (bit_buf, 1);
+                val >>= 4;
+                val = (val ^ tmp) - tmp;
+                i_reorder;
+
+		SATURATE (val);
+		dest[j] = val;
+		mismatch ^= val;
+
+		bit_buf <<= 1;
+		NEEDBITS (bit_buf, bits, bit_ptr);
+		continue;
+
+	    } else {
+
+		/* end of block. I commented out this code because if we */
+		/* do not exit here we will still exit at the later test :) */
+
+		/* if (i >= 128) break;	*/	/* end of block */
+
+		/* escape code */
+
+		i += UBITS (bit_buf << 6, 6) - 64;
+		if (i >= 64)
+		    break;	/* illegal, check against buffer overflow */
+
+		i_noreorder;
+		j = scan[i];
+
+		DUMPBITS (bit_buf, bits, 12);
+		NEEDBITS (bit_buf, bits, bit_ptr);
+                tmp = quant_matrix[j];
+                S32I2M(xr10, j);
+                val = SBITS (bit_buf, 12); 
+                val *= tmp;
+                S32MAX(xr11, xr11, xr10);
+                val >>= 4;
+                i_reorder;         
+      
+		SATURATE (val);
+		dest[j] = val;
+		mismatch ^= val;
+
+		DUMPBITS (bit_buf, bits, 12);
+		NEEDBITS (bit_buf, bits, bit_ptr);
+		continue;
+
+	    }
+	} else if (bit_buf >= 0x02000000) {
+	    tab = DCT_B15_10 + (UBITS (bit_buf, 10) - 8);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+            i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00800000) {
+	    tab = DCT_13 + (UBITS (bit_buf, 13) - 16);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder; 
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00200000) {
+	    tab = DCT_15 + (UBITS (bit_buf, 15) - 16);
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else {
+	    tab = DCT_16 + UBITS (bit_buf, 16);
+	    bit_buf <<= 16;
+	    GETWORD (bit_buf, bits + 16, bit_ptr);
+	    i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	}
+	break;	/* illegal, check needed to avoid buffer overflow */
+    }
+    dest[63] ^= mismatch & 1;
+    DUMPBITS (bit_buf, bits, 4);	/* dump end of block code */
+    decoder->bitstream_buf = bit_buf;
+    decoder->bitstream_bits = bits;
+    decoder->bitstream_ptr = bit_ptr;
+    D32SAR(xr11,xr11,xr0,xr0,3);
+    idct_row_max_intra = S32M2I(xr11)+1;
+}
+#else
 static void get_intra_block_B15 (mpeg2_decoder_t * const decoder,
 				 const uint16_t * const quant_matrix)
 {
@@ -565,7 +915,175 @@ static void get_intra_block_B15 (mpeg2_decoder_t * const decoder,
     decoder->bitstream_bits = bits;
     decoder->bitstream_ptr = bit_ptr;
 }
+#endif
 
+#ifdef JZC_MXU_OPT
+static int get_non_intra_block (mpeg2_decoder_t * const decoder,
+				const uint16_t * const quant_matrix)
+{
+    int i;
+    int j;
+    int val;
+    const uint8_t * const scan = decoder->scan;
+    int mismatch;
+    const DCTtab * tab;
+    uint32_t bit_buf;
+    int bits;
+    const uint8_t * bit_ptr;
+    int16_t * const dest = decoder->DCTblock;
+
+    S32CPS(xr11, xr0, xr0);
+    i = -1;
+    mismatch = -1;
+
+    bit_buf = decoder->bitstream_buf;
+    bits = decoder->bitstream_bits;
+    bit_ptr = decoder->bitstream_ptr;
+
+    NEEDBITS (bit_buf, bits, bit_ptr);
+    if (bit_buf >= 0x28000000) {
+	tab = DCT_B14DC_5 + (UBITS (bit_buf, 5) - 5);
+	goto entry_1;
+    } else
+	goto entry_2;
+
+    while (1) {
+        int32_t my_run, my_len, my_lvl, tmp;
+	if (bit_buf >= 0x28000000) {
+
+	    tab = DCT_B14AC_5 + (UBITS (bit_buf, 5) - 5);
+
+	entry_1:
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i >= 64)
+		break;	/* end of block */
+
+	normal_code:
+	    i_noreorder;
+	    j = scan[i];
+	    bit_buf <<= my_len;
+	    bits += my_len + 1;
+	    val = quant_matrix[j];
+	    S32I2M(xr10, j);
+	    tmp = (my_lvl<<1) + 1;
+	    val *= tmp;
+	    S32MAX(xr11, xr11, xr10);
+	    tmp = SBITS (bit_buf, 1);
+	    val >>= 5;
+	    val = (val ^ tmp) - tmp;
+	    i_reorder;
+
+	    SATURATE (val);
+	    dest[j] = val;
+	    mismatch ^= val;
+	    bit_buf <<= 1;
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+
+	    continue;
+
+	}
+
+    entry_2:
+	if (bit_buf >= 0x04000000) {
+
+	    tab = DCT_B14_8 + (UBITS (bit_buf, 8) - 4);
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+
+	    /* escape code */
+
+	    i += UBITS (bit_buf << 6, 6) - 64;
+	    if (i >= 64)
+		break;	/* illegal, check needed to avoid buffer overflow */
+
+	    i_noreorder;
+	    j = scan[i];
+	    DUMPBITS (bit_buf, bits, 12);
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+	    tmp = quant_matrix[j];
+	    S32I2M(xr10, j);
+	    val = SBITS (bit_buf, 12) + SBITS (bit_buf, 1);	    
+	    val = (val<<1) + 1;
+	    val *= tmp;
+	    val >>= 5;
+	    S32MAX(xr11, xr11, xr10);
+	    i_reorder;
+
+	    SATURATE (val);
+	    dest[j] = val;
+	    mismatch ^= val;
+
+	    DUMPBITS (bit_buf, bits, 12);
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+
+	    continue;
+
+	} else if (bit_buf >= 0x02000000) {
+	    tab = DCT_B14_10 + (UBITS (bit_buf, 10) - 8);
+            i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00800000) {
+	    tab = DCT_13 + (UBITS (bit_buf, 13) - 16);
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00200000) {
+	    tab = DCT_15 + (UBITS (bit_buf, 15) - 16);
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else {
+	    tab = DCT_16 + UBITS (bit_buf, 16);
+	    bit_buf <<= 16;
+	    GETWORD (bit_buf, bits + 16, bit_ptr);
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	}
+	break;	/* illegal, check needed to avoid buffer overflow */
+    }
+    val = S32M2I(xr11);
+    dest[63] ^= mismatch & 1;
+    DUMPBITS (bit_buf, bits, 2);	/* dump end of block code */
+    decoder->bitstream_buf = bit_buf;
+    decoder->bitstream_bits = bits;
+    decoder->bitstream_ptr = bit_ptr;
+    idct_row_max = (val>>3)+1;
+    return i;
+}
+#else
 static int get_non_intra_block (mpeg2_decoder_t * const decoder,
 				const uint16_t * const quant_matrix)
 {
@@ -687,7 +1205,166 @@ static int get_non_intra_block (mpeg2_decoder_t * const decoder,
     decoder->bitstream_ptr = bit_ptr;
     return i;
 }
+#endif
 
+#ifdef JZC_MXU_OPT
+static void get_mpeg1_intra_block (mpeg2_decoder_t * const decoder)
+{
+    int i;
+    int j;
+    int val;
+    const uint8_t * const scan = decoder->scan;
+    const uint16_t * const quant_matrix = decoder->quantizer_matrix[0];
+    const DCTtab * tab;
+    uint32_t bit_buf;
+    int bits;
+    const uint8_t * bit_ptr;
+    int16_t * const dest = decoder->DCTblock;
+
+    S32CPS(xr11, xr0, xr0);
+    i = 0;
+
+    bit_buf = decoder->bitstream_buf;
+    bits = decoder->bitstream_bits;
+    bit_ptr = decoder->bitstream_ptr;
+
+    NEEDBITS (bit_buf, bits, bit_ptr);
+
+    while (1) {
+        int32_t my_run, my_len, my_lvl, tmp;
+	if (bit_buf >= 0x28000000) {
+	    tab = DCT_B14AC_5 + (UBITS (bit_buf, 5) - 5);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level; 
+	    i += my_run;
+	    i_reorder;
+	    if (i >= 64)
+		break;	/* end of block */
+
+	normal_code:
+	    i_noreorder;
+	    j = scan[i];
+	    bit_buf <<= my_len;
+	    bits += my_len + 1;
+	    val = quant_matrix[j];
+            S32I2M(xr10, j);
+	    tmp = my_lvl;
+            val *= tmp;
+            val = (val - 1) | 1;
+            S32MAX(xr11, xr11, xr10);
+            tmp = SBITS (bit_buf, 1);
+            val >>= 4;
+            val = (val ^ tmp) - tmp;
+            i_reorder;
+
+	    SATURATE (val);
+	    dest[j] = val;
+
+	    bit_buf <<= 1;
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+
+	    continue;
+
+	} else if (bit_buf >= 0x04000000) {
+	    tab = DCT_B14_8 + (UBITS (bit_buf, 8) - 4);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder;
+	    if (i < 64)
+		goto normal_code;
+
+	    /* escape code */
+
+	    i += UBITS (bit_buf << 6, 6) - 64;
+	    if (i >= 64)
+		break;	/* illegal, check needed to avoid buffer overflow */
+
+	    i_noreorder;
+	    j = scan[i];
+
+	    DUMPBITS (bit_buf, bits, 12);
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+            tmp = quant_matrix[j];
+            S32I2M(xr10, j);
+
+	    val = SBITS (bit_buf, 8);
+	    if (! (val & 0x7f)) {
+		DUMPBITS (bit_buf, bits, 8);
+		val = UBITS (bit_buf, 8) + 2 * val;
+	    }
+	    //val = (val * quant_matrix[j]) / 16;
+            val *= tmp;
+	    S32MAX(xr11, xr11, xr10);
+            val >>= 4;
+	    /* oddification */
+	    val = (val + ~SBITS (val, 1)) | 1;
+	    i_reorder;
+
+	    SATURATE (val);
+	    dest[j] = val;
+
+	    DUMPBITS (bit_buf, bits, 8);
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+
+	    continue;
+
+	} else if (bit_buf >= 0x02000000) {
+	    tab = DCT_B14_10 + (UBITS (bit_buf, 10) - 8);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00800000) {
+	    tab = DCT_13 + (UBITS (bit_buf, 13) - 16);
+            i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder; 
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00200000) {
+	    tab = DCT_15 + (UBITS (bit_buf, 15) - 16);
+	    i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else {
+	    tab = DCT_16 + UBITS (bit_buf, 16);
+	    bit_buf <<= 16;
+	    GETWORD (bit_buf, bits + 16, bit_ptr);
+	    i_noreorder;
+            my_run = (uint32_t)tab->run;
+            my_len = (uint32_t)tab->len;
+            my_lvl = (uint32_t)tab->level;
+            i += my_run;
+            i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	}
+	break;	/* illegal, check needed to avoid buffer overflow */
+    }
+    val = S32M2I(xr11);
+    DUMPBITS (bit_buf, bits, 2);	/* dump end of block code */
+    decoder->bitstream_buf = bit_buf;
+    decoder->bitstream_bits = bits;
+    decoder->bitstream_ptr = bit_ptr;
+    idct_row_max_intra = (val>>3) + 1;;
+}
+#else
 static void get_mpeg1_intra_block (mpeg2_decoder_t * const decoder)
 {
     int i;
@@ -804,7 +1481,180 @@ static void get_mpeg1_intra_block (mpeg2_decoder_t * const decoder)
     decoder->bitstream_bits = bits;
     decoder->bitstream_ptr = bit_ptr;
 }
+#endif
 
+#ifdef JZC_MXU_OPT
+static int get_mpeg1_non_intra_block (mpeg2_decoder_t * const decoder)
+{
+    int i;
+    int j;
+    int val;
+    const uint8_t * const scan = decoder->scan;
+    const uint16_t * const quant_matrix = decoder->quantizer_matrix[1];
+    const DCTtab * tab;
+    uint32_t bit_buf;
+    int bits;
+    const uint8_t * bit_ptr;
+    int16_t * const dest = decoder->DCTblock;
+  
+    S32CPS(xr11, xr0, xr0);
+    i = -1;
+
+    bit_buf = decoder->bitstream_buf;
+    bits = decoder->bitstream_bits;
+    bit_ptr = decoder->bitstream_ptr;
+
+    NEEDBITS (bit_buf, bits, bit_ptr);
+    if (bit_buf >= 0x28000000) {
+	tab = DCT_B14DC_5 + (UBITS (bit_buf, 5) - 5);
+	goto entry_1;
+    } else
+	goto entry_2;
+
+    while (1) {
+        int32_t my_run, my_len, my_lvl, tmp;
+	if (bit_buf >= 0x28000000) {
+
+	    tab = DCT_B14AC_5 + (UBITS (bit_buf, 5) - 5);
+
+	entry_1:
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i >= 64)
+		break;	/* end of block */
+
+	normal_code:
+	    i_noreorder;
+	    j = scan[i];
+	    bit_buf <<= my_len;
+	    bits += my_len + 1;
+	    val = quant_matrix[j];
+	    S32I2M(xr10, j);
+	    tmp = (my_lvl<<1) + 1;
+	    val *= tmp;
+	    val = (val - 1) | 1;
+	    S32MAX(xr11, xr11, xr10);
+	    tmp = SBITS (bit_buf, 1);
+	    val >>= 5;
+	    val = (val ^ tmp) - tmp;
+	    i_reorder;
+
+	    SATURATE (val);
+	    dest[j] = val;
+
+	    bit_buf <<= 1;
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+
+	    continue;
+
+	}
+
+    entry_2:
+	if (bit_buf >= 0x04000000) {
+
+	    tab = DCT_B14_8 + (UBITS (bit_buf, 8) - 4);
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+
+	    /* escape code */
+
+	    i += UBITS (bit_buf << 6, 6) - 64;
+	    if (i >= 64)
+		break;	/* illegal, check needed to avoid buffer overflow */
+
+	    i_noreorder; 
+	    j = scan[i];
+
+	    DUMPBITS (bit_buf, bits, 12);
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+	    tmp = quant_matrix[j];
+	    S32I2M(xr10, j);
+	    val = SBITS (bit_buf, 8);
+	    if (! (val & 0x7f)) {
+		DUMPBITS (bit_buf, bits, 8);
+		val = UBITS (bit_buf, 8) + 2 * val;
+	    }
+	    val = 2 * (val + SBITS (val, 1)) + 1;
+	    val *= tmp;
+	    val >>= 5;
+
+	    /* oddification */
+	    val = (val + ~SBITS (val, 1)) | 1;
+	    S32MAX(xr11, xr11, xr10);
+	    i_reorder;
+
+	    SATURATE (val);
+	    dest[j] = val;
+
+	    DUMPBITS (bit_buf, bits, 8);
+	    NEEDBITS (bit_buf, bits, bit_ptr);
+
+	    continue;
+
+	} else if (bit_buf >= 0x02000000) {
+	    tab = DCT_B14_10 + (UBITS (bit_buf, 10) - 8);
+            i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00800000) {
+	    tab = DCT_13 + (UBITS (bit_buf, 13) - 16);
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else if (bit_buf >= 0x00200000) {
+	    tab = DCT_15 + (UBITS (bit_buf, 15) - 16);
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	} else {
+	    tab = DCT_16 + UBITS (bit_buf, 16);
+	    bit_buf <<= 16;
+	    GETWORD (bit_buf, bits + 16, bit_ptr);
+	    i_noreorder;
+	    my_run = (uint32_t)tab->run;
+	    my_len = (uint32_t)tab->len;
+	    my_lvl = (uint32_t)tab->level;
+	    i += my_run;
+	    i_reorder;
+	    if (i < 64)
+		goto normal_code;
+	}
+	break;	/* illegal, check needed to avoid buffer overflow */
+    }
+    val = S32M2I(xr11);
+    DUMPBITS (bit_buf, bits, 2);	/* dump end of block code */
+    decoder->bitstream_buf = bit_buf;
+    decoder->bitstream_bits = bits;
+    decoder->bitstream_ptr = bit_ptr;
+    idct_row_max = (val>>3)+1;
+    return i;
+}
+#else
 static int get_mpeg1_non_intra_block (mpeg2_decoder_t * const decoder)
 {
     int i;
@@ -932,6 +1782,7 @@ static int get_mpeg1_non_intra_block (mpeg2_decoder_t * const decoder)
     decoder->bitstream_ptr = bit_ptr;
     return i;
 }
+#endif
 
 static inline void slice_intra_DCT (mpeg2_decoder_t * const decoder,
 				    const int cc,
@@ -942,13 +1793,21 @@ static inline void slice_intra_DCT (mpeg2_decoder_t * const decoder,
 #define bit_ptr (decoder->bitstream_ptr)
     NEEDBITS (bit_buf, bits, bit_ptr);
     /* Get the intra DC coefficient and inverse quantize it */
+#ifdef JZC_MXU_OPT
+    if (cc == 0)
+	decoder->dc_dct_pred[0] += get_luma_dc_dct_diff (decoder);
+    else
+        decoder->dc_dct_pred[cc] += get_chroma_dc_dct_diff (decoder);
+    decoder->DCTblock[0] =
+        decoder->dc_dct_pred[cc] << (3 -decoder->intra_dc_precision);     
+#else
     if (cc == 0)
 	decoder->DCTblock[0] =
 	    decoder->dc_dct_pred[0] += get_luma_dc_dct_diff (decoder);
     else
 	decoder->DCTblock[0] =
 	    decoder->dc_dct_pred[cc] += get_chroma_dc_dct_diff (decoder);
-
+#endif
     if (decoder->mpeg1) {
 	if (decoder->coding_type != D_TYPE)
 	    get_mpeg1_intra_block (decoder);
@@ -956,7 +1815,12 @@ static inline void slice_intra_DCT (mpeg2_decoder_t * const decoder,
 	get_intra_block_B15 (decoder, decoder->quantizer_matrix[cc ? 2 : 0]);
     else
 	get_intra_block_B14 (decoder, decoder->quantizer_matrix[cc ? 2 : 0]);
+#ifdef JZC_MXU_OPT
+    mpeg2_idct_copy_mxu(decoder->DCTblock, dest, stride, idct_row_max_intra);
+#else
     mpeg2_idct_copy (decoder->DCTblock, dest, stride);
+#endif
+
 #undef bit_buf
 #undef bits
 #undef bit_ptr
@@ -973,7 +1837,11 @@ static inline void slice_non_intra_DCT (mpeg2_decoder_t * const decoder,
     else
 	last = get_non_intra_block (decoder,
 				    decoder->quantizer_matrix[cc ? 3 : 1]);
+#ifdef JZC_MXU_OPT
+    mpeg2_idct_add_mxu (decoder->DCTblock, dest, stride,idct_row_max);
+#else
     mpeg2_idct_add (last, decoder->DCTblock, dest, stride);
+#endif
 }
 
 #define MOTION_420(table,ref,motion_x,motion_y,size,y)			      \
@@ -1581,11 +2449,11 @@ do {									\
 				 + decoder->quant_stride		\
 				 + (decoder->offset >> 4)]		\
 		= decoder->quantizer_scale;				\
-	else								\
+	/*else								\
 	    decoder->quant_store[decoder->quant_stride			\
 				 * (decoder->v_offset >> 4)		\
 				 + (decoder->offset >> 4)]		\
-		= decoder->quantizer_scale;				\
+				 = decoder->quantizer_scale;*/		\
     }									\
     decoder->offset += 16;						\
     if (decoder->offset == decoder->width) {				\
@@ -1624,7 +2492,9 @@ void mpeg2_init_fbuf (mpeg2_decoder_t * decoder, uint8_t * current_fbuf[3],
 		      uint8_t * forward_fbuf[3], uint8_t * backward_fbuf[3])
 {
     int offset, stride, height, bottom_field;
-
+    char * ftype[4]={"I type", "P type", "B type", "D type"};
+    
+    printf("mpeg2_init_fbuf, coding type = %s\n", ftype[decoder->coding_type - 1]);
     stride = decoder->stride_frame;
     bottom_field = (decoder->picture_structure == BOTTOM_FIELD);
     offset = bottom_field ? stride : 0;
@@ -1641,6 +2511,9 @@ void mpeg2_init_fbuf (mpeg2_decoder_t * decoder, uint8_t * current_fbuf[3],
     decoder->b_motion.ref[0][0] = backward_fbuf[0] + offset;
     decoder->b_motion.ref[0][1] = backward_fbuf[1] + (offset >> 1);
     decoder->b_motion.ref[0][2] = backward_fbuf[2] + (offset >> 1);
+
+    //printf("stride=%x, offset=%x, height=%x\n", stride, offset, height);
+    printf("cur : %x %x %x, f : %x %x %x, b : %x %x %x\n", decoder->picture_dest[0], decoder->picture_dest[1], decoder->picture_dest[2], decoder->f_motion.ref[0][0], decoder->f_motion.ref[0][1], decoder->f_motion.ref[0][2], decoder->b_motion.ref[0][0], decoder->b_motion.ref[0][1], decoder->b_motion.ref[0][2]);
 
     if (decoder->picture_structure != FRAME_PICTURE) {
 	decoder->dmv_offset = bottom_field ? 1 : -1;
@@ -1733,8 +2606,11 @@ static inline int slice_init (mpeg2_decoder_t * const decoder, int code)
     const MBAtab * mba;
 
     decoder->dc_dct_pred[0] = decoder->dc_dct_pred[1] =
+#ifdef JZC_MXU_OPT
+        decoder->dc_dct_pred[2] = 128 << decoder->intra_dc_precision;
+#else
 	decoder->dc_dct_pred[2] = 16384;
-
+#endif
     decoder->f_motion.pmv[0][0] = decoder->f_motion.pmv[0][1] = 0;
     decoder->f_motion.pmv[1][0] = decoder->f_motion.pmv[1][1] = 0;
     decoder->b_motion.pmv[0][0] = decoder->b_motion.pmv[0][1] = 0;
@@ -1807,6 +2683,29 @@ static inline int slice_init (mpeg2_decoder_t * const decoder, int code)
 #undef bit_ptr
 }
 
+#ifdef MPEG2_SCH_CONTROL
+#include "soc/mpeg2_dcore.h"
+#include "soc/jzm_mpeg2_dec.c"
+#include "soc/jzm_mpeg2_dec.h"
+#include "soc/jzm_vpu.h"
+#define write_vpu_reg(off, value) (*((volatile unsigned int *)(off)) = (value))
+#define read_vpu_reg(off, ofst)   (*((volatile unsigned int *)(off + ofst)))
+
+extern volatile unsigned char *gp0_base;
+extern volatile unsigned char *vpu_base;
+extern volatile unsigned char *sde_base;
+
+extern volatile unsigned char * vdma_base;
+extern volatile unsigned int * bs_data;
+static _M2D_SliceInfo slice_info_hw;
+uint32_t coef_qt_hw[4][16];
+int frame_num;
+#endif
+
+#include "soc/mpeg2_crc.h"
+
+#ifdef MPEG2_SCH_CONTROL
+//extern int save_copied;
 void mpeg2_slice (mpeg2_decoder_t * const decoder, const int code,
 		  const uint8_t * const buffer)
 {
@@ -1823,6 +2722,143 @@ void mpeg2_slice (mpeg2_decoder_t * const decoder, const int code,
     if (mpeg2_cpu_state_save)
 	mpeg2_cpu_state_save (&cpu_state);
 
+    /* ------------ init slice info ------------- */
+    printf("--------------- init %d slice info -------------------\n", decoder->v_offset / 16);
+    _M2D_SliceInfo *s= &slice_info_hw;
+    memset(s, 0, sizeof(_M2D_SliceInfo));
+    _M2D_BitStream *bs= &s->bs_buf;
+    
+    s->des_va= vdma_base;
+    memset(s->des_va, 0, 0x2000);
+    s->des_pa= get_phy_addr(vdma_base);
+
+    NEEDBITS(bit_buf,bits,bit_ptr);
+    /*---------------assign bs begin--------------------*/
+    bs->buffer= bit_ptr - 4;   /*BS buffer physical address*/
+    bs->bit_ofst= bits + 16;  /*bit offset for first word*/
+    uint8_t tmp_bs= (bs->buffer& 0x03)*8 + bs->bit_ofst;      
+    if (tmp_bs >= 32){  /*align one words*/
+        bs->buffer= (((bs->buffer>>2)+ 1)<< 2);
+        bs->bit_ofst= tmp_bs- 32;
+    } else {
+        bs->buffer= ((bs->buffer>>2)<<2);
+        bs->bit_ofst= tmp_bs;
+    }
+
+    // -------------- copy bs data, soft buffer can not be used
+    int i, j;
+    uint32_t *bs_data_tmp = (unsigned int *)bs->buffer;
+    memset(bs_data, 0, 0x5000);
+    for(i = 0; i < ((save_copied + 3) / 4); i++)
+        bs_data[i] = bs_data_tmp[i];
+    jz_dcache_wb();
+    bs->buffer = get_phy_addr(bs_data);
+    printf("save_copied = %x\n", save_copied);
+
+    // -------------- evaluate struct s
+    s->mb_width= decoder->stride_frame>>4;
+    s->mb_height= decoder->height>>4;
+    s->mb_pos_x=decoder->offset / 16;
+    s->mb_pos_y=decoder->v_offset / 16;
+
+    for(i = 0; i < 4; i++){
+        for(j = 0; j < 16; j++)
+            s->coef_qt[i][j] = coef_qt_hw[i][j]; /* coef quantizer table */
+    }
+
+    uint32_t * scan_table = decoder->scan;
+    for(i = 0; i < 16; i++)
+        s->scan[i] = scan_table[i];   /* scan table */
+
+    s->coding_type=decoder->coding_type;
+    s->fr_pred_fr_dct=decoder->frame_pred_frame_dct;
+    s->pic_type=decoder->picture_structure;
+    s->conceal_mv=decoder->concealment_motion_vectors;
+    s->intra_dc_pre=decoder->intra_dc_precision;
+    s->intra_vlc_format=decoder->intra_vlc_format;
+    s->mpeg1=decoder->mpeg1;
+    s->top_fi_first=decoder->top_field_first;
+    s->q_scale_type=decoder->q_scale_type;
+    s->qs_code=save_qs_code;
+    s->dmv_ofst=decoder->dmv_offset;
+    s->sec_fld=decoder->second_field;
+
+    s->f_code[0][0]=decoder->b_motion.f_code[0];
+    s->f_code[0][1]=decoder->b_motion.f_code[1];
+    s->f_code[1][0]=decoder->f_motion.f_code[0];
+    s->f_code[1][1]=decoder->f_motion.f_code[1];
+
+    s->pic_ref[0][0]= get_phy_addr(decoder->f_motion.ref[0][0]);
+    s->pic_ref[0][1]= get_phy_addr(decoder->b_motion.ref[0][0]);
+    s->pic_ref[1][0]= get_phy_addr(decoder->f_motion.ref[0][1]);
+    s->pic_ref[1][1]= get_phy_addr(decoder->b_motion.ref[0][1]);
+    s->pic_cur[0]= get_phy_addr(decoder->picture_dest[0]);
+    s->pic_cur[1]= get_phy_addr(decoder->picture_dest[1]);
+
+    M2D_SliceInit(s);
+    jz_dcache_wb();
+    
+#if 0
+    print_slice_info(s, bit_ptr - 4);
+#endif
+
+    /* --------------- start ACFG config -------------- */
+    *((volatile int *)(gp0_base + 0xC)) = 0x0;
+    *((volatile int *)(sde_base + 0x0)) = 0x0;
+    *((volatile int *)(vpu_base + 0x34)) = 0x0;
+    printf("state = %x, sde = %x, vpu = %x\n", read_vpu_reg(gp0_base + 0xC, 0), read_vpu_reg(sde_base + 0x0, 0), read_vpu_reg(vpu_base + 0x34, 0));
+    
+    // open sch interrupt and close TLB before VDMA config, then VDMA will config regs without TLB
+    // Or we are not ensure the TLB is not enable, which may bring out error.
+    write_vpu_reg(vpu_base+ REG_SCH_GLBC, (SCH_INTE_ACFGERR | SCH_INTE_BSERR | SCH_INTE_ENDF) );
+
+    *(volatile unsigned int *)(sde_base + 0xF0F0) = 0x1; //reset VPU
+    write_vpu_reg(gp0_base + 0x8, (VDMA_ACFG_DHA(s->des_pa) | VDMA_ACFG_RUN));
+
+    //-------- waiting for end
+    while( (read_vpu_reg(gp0_base + 0xC, 0) & 0x4) == 0x0 );
+    printf("state = %x, sde state = %x, vpu state = %x\n", read_vpu_reg(gp0_base + 0xC, 0), read_vpu_reg(sde_base + 0x0, 0), read_vpu_reg(vpu_base + 0x34, 0));
+
+    while( ((read_vpu_reg(sde_base + 0x0, 0x0) & 0x2) == 0) );  // sde slice done
+    while( ((read_vpu_reg(vpu_base + 0x34, 0x0) & 0x1) == 0) );
+    printf("state = %x, sde state = %x, vpu state = %x\n", read_vpu_reg(gp0_base + 0xC, 0), read_vpu_reg(sde_base + 0x0, 0), read_vpu_reg(vpu_base + 0x34, 0));
+
+    //prin_crc(decoder->dest[0], decoder->dest[1], decoder->stride_frame>>4, decoder->v_offset / 16);
+
+    if (mpeg2_cpu_state_restore)
+        mpeg2_cpu_state_restore (&cpu_state);
+#undef bit_buf
+#undef bits
+#undef bit_ptr
+}
+
+#else
+
+void mpeg2_slice (mpeg2_decoder_t * const decoder, const int code,
+		  const uint8_t * const buffer)
+{
+#define bit_buf (decoder->bitstream_buf)
+#define bits (decoder->bitstream_bits)
+#define bit_ptr (decoder->bitstream_ptr)
+    cpu_state_t cpu_state;
+
+    bitstream_init (decoder, buffer);
+    
+    if (slice_init (decoder, code))
+	return;
+
+    if (mpeg2_cpu_state_save)
+	mpeg2_cpu_state_save (&cpu_state);
+    
+    /* 1/2  1 3 0 7 0 0 0 0 0 0  -- Amazing... */
+    /* 1/2  1 3 0 7 0 0 0 0 ce0610 0  -- Dolphin... */
+    /* 1/2  1 3 0 7 0 0 0 0 fb98775d 0  -- Discover... */
+/*     printf("%x %x %x %x %x %x %x %x %x %x %x\n", decoder->coding_type, decoder->frame_pred_frame_dct, decoder->picture_structure, decoder->concealment_motion_vectors, decoder->intra_dc_precision, decoder->intra_vlc_format, decoder->mpeg1, decoder->top_field_first, decoder->q_scale_type, decoder->dmv_offset, decoder->second_field); */
+
+    /* e e e e | e e 2 2 | e e 3 3 | e e 2 2  -- Amazing... */
+    /* e e e e | e e 0 0 | e e 0 0 | e e 0 0  -- Dolphin... (e e 1/2 1/2)*/
+    /* e e e e | e e 0 0 | e e 0 0 | e e 0 0  -- Discover... (e e 4 4)*/
+/*     printf("%x %x %x %x\n", decoder->b_motion.f_code[0], decoder->b_motion.f_code[1], decoder->f_motion.f_code[0], decoder->f_motion.f_code[1]); */
     while (1) {
 	int macroblock_modes;
 	int mba_inc;
@@ -2046,7 +3082,11 @@ void mpeg2_slice (mpeg2_decoder_t * const decoder, const int code,
 	    }
 
 	    decoder->dc_dct_pred[0] = decoder->dc_dct_pred[1] =
+#ifdef JZC_MXU_OPT
+	        decoder->dc_dct_pred[2] = 128 << decoder->intra_dc_precision; 
+#else
 		decoder->dc_dct_pred[2] = 16384;
+#endif
 	}
 
 	NEXT_MACROBLOCK;
@@ -2071,6 +3111,9 @@ void mpeg2_slice (mpeg2_decoder_t * const decoder, const int code,
 	    default:	/* end of slice, or error */
 		if (mpeg2_cpu_state_restore)
 		    mpeg2_cpu_state_restore (&cpu_state);
+                
+/*                 prin_crc(decoder->dest[0], decoder->dest[1], decoder->dest[2], decoder->stride_frame>>4,  */
+/*                          decoder->v_offset / 16); */
 		return;
 	    }
 	}
@@ -2079,7 +3122,11 @@ void mpeg2_slice (mpeg2_decoder_t * const decoder, const int code,
 
 	if (mba_inc) {
 	    decoder->dc_dct_pred[0] = decoder->dc_dct_pred[1] =
+#ifdef JZC_MXU_OPT
+                decoder->dc_dct_pred[2] = 128 << decoder->intra_dc_precision;
+#else
 		decoder->dc_dct_pred[2] = 16384;
+#endif
 
 	    if (decoder->coding_type == P_TYPE) {
 		do {
@@ -2099,3 +3146,4 @@ void mpeg2_slice (mpeg2_decoder_t * const decoder, const int code,
 #undef bits
 #undef bit_ptr
 }
+#endif

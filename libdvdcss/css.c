@@ -2,7 +2,7 @@
  * css.c: Functions for DVD authentication and descrambling
  *****************************************************************************
  * Copyright (C) 1999-2008 VideoLAN
- * $Id$
+ * $Id: css.c,v 1.1.1.1 2012/03/27 04:02:56 dqliu Exp $
  *
  * Authors: Stéphane Borel <stef@via.ecp.fr>
  *          Håkan Hjort <d95hjort@dtek.chalmers.se>

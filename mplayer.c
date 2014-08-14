@@ -18,9 +18,10 @@
 
 /// \file
 /// \ingroup Properties Command2Property OSDMsgStack
+#define JZC_MXU_OPT
+#include "../libjzcommon/jzmedia.h"
 
 #include "config.h"
-
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -33,6 +34,8 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <linux/fb.h>
+#include <sys/mman.h>
 
 #if defined(__MINGW32__) || defined(__CYGWIN__)
 #define _UWIN 1  /*disable Non-underscored versions of non-ANSI functions as otherwise int eof would conflict with eof()*/
@@ -140,6 +143,13 @@
 #include "stream/stream_dvd.h"
 #endif
 
+#ifdef JZC_CRC_VER
+FILE *crc_fp;
+#endif
+
+#ifdef JZC_PMON_P0ed
+extern FILE *pmon_p0_fp;
+#endif
 
 int slave_mode=0;
 int player_idle_mode=0;
@@ -148,6 +158,12 @@ int enable_mouse_movements=0;
 float start_volume = -1;
 double start_pts = MP_NOPTS_VALUE;
 char *heartbeat_cmd;
+int use_jz_buf=0;
+int use_jz_buf_change=0;
+#ifdef RECOVE_FB_ORG
+	static fb_org_buf = NULL;
+	static int fbSize = -1;
+#endif
 
 #define ROUND(x) ((int)((x)<0 ? (x)-0.5 : (x)+0.5))
 
@@ -715,8 +731,101 @@ void uninit_player(unsigned int mask){
   current_module=NULL;
 }
 
+#ifdef RECOVE_FB_ORG
+#define RECOVE_FB_ORG_PAGE_SIZE		(0x1000)
+#define RECOVE_FB_ORG_FBDEV_NAME	"/dev/fb0"
+
+static inline int roundUpToPageSize(int x)
+{
+	return (x + (RECOVE_FB_ORG_PAGE_SIZE-1)) \
+		& ~(RECOVE_FB_ORG_PAGE_SIZE-1);
+}
+void keep_org_picture(void)
+{
+	int fbfd = -1;
+	struct fb_fix_screeninfo fb_fix_info;
+	struct fb_var_screeninfo fb_var_info;
+	char *fb_vaddr = NULL;
+	fb_org_buf = NULL;
+	fbSize = 0;
+
+	/* Get lcd control info and do some setting.  */
+	fbfd = open(RECOVE_FB_ORG_FBDEV_NAME, O_RDWR);
+	if ( fbfd < 1 ) {
+		mp_msg(NULL, NULL, "open %s failed\n", RECOVE_FB_ORG_FBDEV_NAME);
+		return -1;
+	}
+
+	if (ioctl(fbfd, FBIOGET_FSCREENINFO, &fb_fix_info) == -1)
+		return -errno;
+
+	if (ioctl(fbfd, FBIOGET_VSCREENINFO, &fb_var_info) == -1)
+		return -errno;
+
+	/* map fb address */
+	fbSize = roundUpToPageSize(fb_fix_info.line_length * fb_var_info.yres_virtual);
+	//printf("fbSize=%d\n", fbSize);
+	fb_vaddr = mmap(0, fbSize, PROT_READ|PROT_WRITE, MAP_SHARED, fbfd, 0);
+	if (fb_vaddr == MAP_FAILED) {
+		mp_msg(NULL, NULL, "Error mapping the framebuffer (%s)\n", strerror(errno));
+		return -errno;
+	}
+
+	fb_org_buf = malloc(fbSize);
+	memset(fb_org_buf, 0, fbSize);
+	memcpy(fb_org_buf, fb_vaddr, fbSize);
+	munmap(fb_vaddr, fbSize);
+	close(fbfd);
+
+	return 0;
+
+}
+
+void recovery_org_picture(void)
+{
+	int fbfd = -1;
+	char *fb_vaddr;
+
+	/* Get lcd control info and do some setting.  */
+	fbfd = open(RECOVE_FB_ORG_FBDEV_NAME, O_RDWR);
+	if ( fbfd < 1 ) {
+		mp_msg(NULL, NULL, "open %s failed\n", RECOVE_FB_ORG_FBDEV_NAME);
+		return -1;
+	}
+
+	//printf("fbSize=%d\n", fbSize);
+	fb_vaddr = mmap(0, fbSize, PROT_READ|PROT_WRITE, MAP_SHARED, fbfd, 0);
+	if (fb_vaddr == MAP_FAILED) {
+		mp_msg(NULL, NULL, "Error mapping the framebuffer (%s)\n", strerror(errno));
+		return -errno;
+	}
+	memcpy(fb_vaddr, fb_org_buf, fbSize);
+
+	munmap(fb_vaddr, fbSize);
+	free(fb_org_buf);
+	close(fbfd);
+	fb_org_buf = NULL;
+	fbSize = 0;
+
+	return 0;
+}
+#endif
+
 void exit_player_with_rc(enum exit_reason how, int rc)
 {
+#ifdef JZC_CRC_VER
+  extern short crc_code;
+  if(crc_fp != NULL){
+    fprintf(crc_fp, "%s: \t0x%x\n", filename, crc_code);
+    fclose(crc_fp);
+  }
+#endif //JZC_CRC_VER
+
+#ifdef JZC_PMON_P0ed
+  fprintf(pmon_p0_fp,"=======================================\n");
+  if(pmon_p0_fp != NULL)
+    fclose(pmon_p0_fp);
+#endif //JZC_PMON_P0
 
 #ifdef CONFIG_NETWORKING
   if (udp_master)
@@ -775,6 +884,7 @@ void exit_player_with_rc(enum exit_reason how, int rc)
   case EXIT_EOF:
     mp_msg(MSGT_CPLAYER,MSGL_INFO,MSGTR_ExitingHow,MSGTR_Exit_eof);
     mp_msg(MSGT_IDENTIFY, MSGL_INFO, "ID_EXIT=EOF\n");
+    printf("mplayer run successful over\n");
     break;
   case EXIT_ERROR:
     mp_msg(MSGT_CPLAYER,MSGL_INFO,MSGTR_ExitingHow,MSGTR_Exit_error);
@@ -784,7 +894,13 @@ void exit_player_with_rc(enum exit_reason how, int rc)
     mp_msg(MSGT_IDENTIFY, MSGL_INFO, "ID_EXIT=NONE\n");
   }
   mp_msg(MSGT_CPLAYER,MSGL_DBG2,"max framesize was %d bytes\n",max_framesize);
+#ifdef JZC_HW_MEDIA
+  VAE_unmap();
+#endif
 
+#ifdef RECOVE_FB_ORG
+	recovery_org_picture();
+#endif
   exit(rc);
 }
 
@@ -2108,16 +2224,21 @@ static void adjust_sync_and_print_status(int between_frames, float timing_error)
 		mpctx->delay+=x;
 		c_total+=x;
 	    }
+#if 0
 	    if(!quiet)
 		print_status(a_pts - audio_delay, AV_delay, c_total);
+#endif//dqliu 20100916
 	}
 
-    } else {
+    }
+#if 0
+ else {
 	// No audio:
 
 	if (!quiet)
 	    print_status(0, 0, 0);
     }
+#endif
 }
 
 static int fill_audio_out_buffers(void)
@@ -2214,7 +2335,7 @@ static int sleep_until_update(float *time_frame, float *aq_sleep_time)
 {
     int frame_time_remaining = 0;
     current_module="calc_sleep_time";
-
+#if 1
 #ifdef CONFIG_NETWORKING
     if (udp_slave) {
         int udp_master_exited = udp_slave_sync(mpctx);
@@ -2282,7 +2403,7 @@ static int sleep_until_update(float *time_frame, float *aq_sleep_time)
       send_udp(udp_ip, udp_port, current_time);
     }
 #endif /* CONFIG_NETWORKING */
-
+#endif//xjyu,2010-9-15: close sleep
     return frame_time_remaining;
 }
 
@@ -2392,6 +2513,31 @@ err_out:
   return 0;
 }
 
+#ifdef USE_IPU_THROUGH_MODE
+unsigned int disp_buf0 = 0, disp_buf1 = 0, disp_buf2 = 0;
+void clear_dispbuf()
+{
+    disp_buf0 = 0;
+    disp_buf1 = 0;    
+    disp_buf2 = 0;    
+}
+unsigned int get_disp_buf0()
+{
+    return disp_buf0;
+    
+}
+unsigned int get_disp_buf1()
+{
+    return disp_buf1;
+    
+}
+unsigned int get_disp_buf2()
+{
+    return disp_buf2;
+    
+}
+#endif
+
 static double update_video(int *blit_frame)
 {
     sh_video_t * const sh_video = mpctx->sh_video;
@@ -2477,8 +2623,18 @@ static double update_video(int *blit_frame)
     } while (!full_frame);
 
 	current_module = "filter_video";
+#ifdef USE_IPU_THROUGH_MODE
+	if(decoded_frame){				
+	  disp_buf0 = disp_buf1;
+	  disp_buf1 = disp_buf2;
+	  disp_buf2 = (unsigned int)((mp_image_t *)decoded_frame)->planes[0];
+	  *blit_frame = filter_video(sh_video, decoded_frame,
+				     sh_video->pts);
+	}
+#else
 	*blit_frame = (decoded_frame && filter_video(sh_video, decoded_frame,
 						    sh_video->pts));
+#endif
     }
     else {
 	int res = generate_video_frame(sh_video, mpctx->d_video);
@@ -2737,10 +2893,7 @@ static int seek(MPContext *mpctx, double amount, int style)
  * file for some tools to link against. */
 #ifndef DISABLE_MAIN
 int main(int argc,char* argv[]){
-
-
 char * mem_ptr;
-
 // movie info:
 
 /* Flag indicating whether MPlayer should exit without playing anything. */
@@ -2751,6 +2904,42 @@ int opt_exit = 0;
 int i;
 
 int gui_no_filename=0;
+#ifdef RECOVE_FB_ORG
+	keep_org_picture();
+#endif
+
+#ifdef JZC_HW_MEDIA
+ VAE_map();
+#ifdef JZC_MXU_OPT
+ S32I2M(xr16,7);
+#endif
+#endif
+#ifdef JZC_CRC_VER
+ crc_fp = fopen("jz4760e_crc.log", "aw");
+ if(crc_fp == NULL)
+   mp_msg(NULL,NULL,"Error: Open crc log file Failed!\n");
+#endif
+
+#ifdef JZC_PMON_P0ed
+#if defined(STA_INSN)
+# define PMON_P0_FILE_NAME "jz4760_pmon_p0.insn"
+#elif defined(STA_UINSN)
+# define PMON_P0_FILE_NAME "jz4760_pmon_p0.insn"
+#elif defined(STA_CCLK)
+# define PMON_P0_FILE_NAME "jz4760_pmon_p0.cclk"
+#elif defined(STA_DCC)
+# define PMON_P0_FILE_NAME "jz4760_pmon_p0.cc"
+#elif defined(STA_ICC)
+# define PMON_P0_FILE_NAME "jz4760_pmon_p0.cc"
+#elif defined(STA_TLB)
+# define PMON_P0_FILE_NAME "jz4760_pmon_p0.tlb"
+#else
+# error "If JZC_PMON_P0 defined, one of STA_INSN/STA_CCLK/STA_DCC/STA_ICC must be defined!"
+#endif
+ pmon_p0_fp = fopen(PMON_P0_FILE_NAME, "aw");
+ if(pmon_p0_fp == NULL)
+   mp_msg(NULL,NULL,"jz4760_pmon_p0 open failed!\n");
+#endif // JZC_PMON_P0
 
   InitTimer();
   srand(GetTimerMS());
@@ -3879,10 +4068,10 @@ if(!mpctx->sh_video) {
   // TODO: handle this better
   if((!quiet || end_at.type == END_AT_TIME) && mpctx->sh_audio)
     a_pos = playing_audio_pts(mpctx->sh_audio, mpctx->d_audio, mpctx->audio_out);
-
+#if 0
   if(!quiet)
     print_status(a_pos, 0, 0);
-
+#endif
   if(end_at.type == END_AT_TIME && end_at.pos < a_pos)
     mpctx->eof = PT_NEXT_ENTRY;
   update_subtitles(NULL, a_pos, mpctx->d_sub, 0);
@@ -3892,6 +4081,7 @@ if(!mpctx->sh_video) {
 
 /*========================== PLAY VIDEO ============================*/
 
+  //vo_pts=mpctx->sh_video->timer*90000.0;
   vo_pts=mpctx->sh_video->timer*90000.0;
   vo_fps=mpctx->sh_video->fps;
 

@@ -287,8 +287,8 @@ static int init(sh_video_t *sh){
 	    if (!load_syms_windows(sh->codec->dll))
 #endif
 	{
-		mp_msg(MSGT_DECVIDEO,MSGL_ERR,MSGTR_MissingDLLcodec,sh->codec->dll);
-		mp_msg(MSGT_DECVIDEO,MSGL_HINT,"Read the RealVideo section of the DOCS!\n");
+	      //mp_msg(MSGT_DECVIDEO,MSGL_ERR,MSGTR_MissingDLLcodec,sh->codec->dll);
+	      //mp_msg(MSGT_DECVIDEO,MSGL_HINT,"Read the RealVideo section of the DOCS!\n");
 		free(path);
 		return 0;
 	}

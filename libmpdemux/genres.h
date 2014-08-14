@@ -23,7 +23,7 @@
  ***********************************
  *
  * Initially modified for use with MPlayer by Diego Biurrun on 2004-08-22
- * $Id$
+ * $Id: genres.h,v 1.1.1.1 2012/03/27 04:02:57 dqliu Exp $
  * detailed changelog at http://svn.mplayerhq.hu/mplayer/trunk/
  */
 
