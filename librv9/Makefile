@@ -5,10 +5,10 @@ JZC_FPGA	= 0
 JZC_RTL		= 0
 
 ################################## TOOL CHAIN #####################################
-AR 		= mipsel-linux-ar
-LD 		= mipsel-linux-ld
-CC 		= mipsel-linux-gcc 
-RANLIB 		= mipsel-linux-ranlib
+AR 		= ar
+LD 		= ld
+CC 		= gcc 
+RANLIB 		= ranlib
 
 CFLAGS 		= -mips32 -std=gnu99 -O2 -fno-builtin \
 		  -fno-exceptions -ffunction-sections -falign-functions=32 \

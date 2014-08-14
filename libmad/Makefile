@@ -4,15 +4,15 @@ JZ4740_BSP := 0
 JZ4750_BSP := 0
 JZ4755_BSP := 1
 
-AR=mipsel-linux-ar
-RANLIB=mipsel-linux-ranlib
+AR=ar
+RANLIB=ranlib
 
 ifeq ($(JZ47_LINUX), 1)
 
 ifeq ($(HAVE_ANDROID_OS), 1)
 
-CC := mipsel-linux-gcc -mips32 -D__LINUX__
-CXX := mipsel-linux-gcc -mips32 -D__LINUX__
+CC := gcc -mips32 -D__LINUX__
+CXX := gcc -mips32 -D__LINUX__
 
 ifeq ($(JZ4750_BSP),1)
 CC += -DJZ4750_OPT
@@ -29,8 +29,8 @@ OPTFLAGS := -I. -I.. -I../libavutil -Wall -Wno-switch -Wpointer-arith -Wredundan
 
 else
 
-CC := mipsel-linux-gcc -mips32 
-CXX := mipsel-linux-gcc -mips32 
+CC := gcc -mips32 
+CXX := gcc -mips32 
 
 ifeq ($(JZ4750_BSP),1)
 CC += -DJZ4750_OPT

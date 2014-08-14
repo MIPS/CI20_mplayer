@@ -15,9 +15,9 @@ VC1_ROOT 	= ../../../
 ICSYS_DIR       = /icdev/toolchain/icsys/bin/
 #============================= Tools define
 
-LD 		= mipsel-linux-ld
-CC 		= mipsel-linux-gcc 
-COPY		= mipsel-linux-objcopy
+LD 		= ld
+CC 		= gcc 
+COPY		= objcopy
 
 #CC 		= $(ICSYS_DIR)./mipsisa32-gcc-3.3
 #LD		= $(ICSYS_DIR)./mipsisa32-ld
