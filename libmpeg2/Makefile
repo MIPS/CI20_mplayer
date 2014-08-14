@@ -20,7 +20,7 @@ CFLAGS 		= -mips32 -O2 -fno-builtin \
 		  -Wpointer-arith -Wredundant-decls -pipe -fomit-frame-pointer \
                      -D_REENTRANT -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 \
                      -D_LARGEFILE64_SOURCE -DHAVE_CONFIG_H -DHAVE_AV_CONFIG_H \
-                     -D_ISOC9X_SOURCE -DJZC_MXU_OPT 
+                     -D_ISOC9X_SOURCE
 
 ifeq 		($(JZC_LINUX),1)
 CFLAGS		+= -fPIC
@@ -28,7 +28,7 @@ CFLAGS		+= -D_LINUX_
 endif
 
 ifeq 		($(JZC_UCOS),1)
-CFLAGS             += -mno-abicalls -fno-pic
+CFLAGS          += -mno-abicalls -fno-pic
 CFLAGS		+= -D_UCOS_ 
 endif
 
@@ -44,7 +44,6 @@ endif
 
 ################################## COMPILE  DEF #####################################
 SRCS_DIR 	= .
-REL_DIR 	= ../
 
 LIB		= libmpeg2.a
 
@@ -52,27 +51,17 @@ SRCS_VD_MPEG2 	= $(SRCS_DIR)/slice.c $(SRCS_DIR)/alloc.c  $(SRCS_DIR)/idct.c $(S
 		  $(SRCS_DIR)/cpu_accel.c $(SRCS_DIR)/cpu_state.c $(SRCS_DIR)/decode.c  $(SRCS_DIR)/header.c\
 
 OBJS_VD_MPEG2 	= $(addsuffix .o, $(basename $(SRCS_VD_MPEG2)) )
-
-OBJS 		= $(OBJS_VD_MPEG2)
 MIDS_VD_MPEG2 	= $(OBJS_VD_MPEG2:.o=.s)
 ASMS_VD_MPEG2 	= $(OBJS_VD_MPEG2:.o=.mid)
 
 CFLAGS 		+= -I. -I.. -I../libavcodec -I../libavutil
 
-STATIC_OBJS 	:= $(OBJS)
-
-
 all: 		$(LIB) Makefile
-		@test -d $(REL_DIR)
-		cp $(LIB) $(REL_DIR)
 
-$(LIB): 		$(STATIC_OBJS)
+$(LIB): 	$(OBJS_VD_MPEG2)
 		rm -f $@
 		$(AR) rc $@ $^ 
 		$(RANLIB) $@
-
-# $(REL_DIR):
-# 		test -d $(REL_DIR) || mkdir $(REL_DIR)
 
 $(OBJS_VD_MPEG2):%.o:%.s
 		$(CC) $(CFLAGS) -c -o $@ $<
@@ -82,5 +71,4 @@ $(ASMS_VD_MPEG2):%.mid:%.c
 		$(CC) $(CFLAGS) -S -o $@ $<
 
 clean::
-		rm -f *.o *~ *.a *.lib *.so *.so.* *.dylib *.dll *.s *.mid\
-	      	*.def *.dll.a *.exp *.d
+		rm -f *.o *~ *.a *.lib *.so *.so.* *.dylib *.dll *.s *.mid *.def *.dll.a *.exp *.d

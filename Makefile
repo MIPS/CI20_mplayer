@@ -521,8 +521,8 @@ SRCS_COMMON = asxparser.c \
               stream/stream_mf.c \
               stream/stream_null.c \
               stream/url.c \
-              jz47_vae_map.c\
               jz47_soc_mem.c\
+              jz47_vae_map.c\
               libjzipu/jz47_soc_rsize.c\
               libjzipu/jzipu_base.c\
               libjzipu/jz47_sw_render.c\
@@ -779,6 +779,15 @@ DIRS =  . \
         libao2 \
         libass \
         libavcodec \
+        libvc1\
+	librv9\
+	librv9/jzsoc \
+	libffmpeg2 \
+	libffmpeg2/jzsoc \
+        libmpeg4\
+	libmpeg4/jzsoc \
+	libmad\
+	libmad/libmad-0.15.1b \
         libavcodec/alpha \
         libavcodec/arm \
         libavcodec/bfin \
@@ -805,6 +814,10 @@ DIRS =  . \
         libmpcodecs \
         libmpcodecs/native \
         libmpdemux \
+        libmpeg2 \
+	libmpeg2/soc \
+        libh264 \
+        libvp8 \
         libpostproc \
         libswscale \
         libswscale/bfin \
@@ -826,18 +839,9 @@ DIRS =  . \
         tremor \
         TOOLS \
         vidix \
-
-DIRS += libjzipu \
-	libjzipu/jz4780_ipu_hal \
+	libjzipu \
 	libjzipu/jz4780_x2d_hal \
-	libvc1 \
-        libh264 \
-	librv9 \
-        libmpeg4 \
-        libvp8 \
-        libmpeg2 \
-	libmad \
-	libmad/libmad-0.15.1b \
+	libjzipu/jz4780_ipu_hal \
 
 ALLHEADERS = $(foreach dir,$(DIRS),$(wildcard $(dir)/*.h))
 all:	$(ALL_PRG) 
@@ -847,21 +851,22 @@ ADD_ALL_DIRS    = $(call ADDSUFFIXES,$(1),$(DIRS))
 ADD_ALL_EXESUFS = $(1) $(call ADDSUFFIXES,$(EXESUFS_ALL),$(1))
 
 FFMPEGPARTS = libavcodec \
+	      libvc1\
+	      librv9\
+              libmpeg4\
+	      libh264\
+	      libvp8\
               libavcore \
               libavformat \
               libavutil \
               libpostproc \
               libswscale \
-
-FFMPEGPARTS +=libvc1 \
-	      libh264 \
-	      librv9 \
-              libmpeg4 \
-	      libvp8 \
-	      libmad \
+							libmad\
 
 FFMPEGLIBS  = $(foreach part, $(FFMPEGPARTS), $(part)/$(part).a)
+FFMPEGLIBS += libmad/libmad.a
 FFMPEGFILES = $(foreach part, $(FFMPEGPARTS), $(wildcard $(part)/*.[chS] $(part)/*/*.[chS]))
+FFMPEGFILES += libmad/libmad-0.15.1b/*.c libmad/libmad-0.15.1b/*.h
 
 ###### generic rules #######
 all: $(ALL_PRG-yes)
@@ -929,6 +934,21 @@ checkheaders: $(ALLHEADERS:.h=.ho)
 
 
 ###### dependency declarations / specific CFLAGS ######
+
+########## LIB H264 ###########
+libh264/libh264.a:
+	$(MAKE) -C libh264
+
+########## P1 TASK ###########
+# $(H264_P1_BIN)::
+# 	$(MAKE) -C libh264/jzsoc
+# 	cp -f libh264/jzsoc/h264_cavlc_p1.bin .
+# 	cp -f libh264/jzsoc/h264_p1.bin .
+# 	@echo "Information: h264 p1 bin generated successfully!"	
+
+########## LIB H264 ###########
+libvp8/libvp8.a:
+	$(MAKE) -C libvp8
 
 # Make sure all generated header files are created.
 codec-cfg.d codec-cfg.o: codecs.conf.h
@@ -1029,9 +1049,20 @@ uninstall:
 	rm -f $(foreach lang,$(MAN_LANGS),$(foreach man,mplayer.1 mencoder.1,$(MANDIR)/$(lang)/man1/$(man)))
 
 clean:
-	-rm -f $(call ADD_ALL_DIRS,/*.s /*.mid /*.o /*.a /*.ho /*~ /*.mid)
+	-rm -f $(call ADD_ALL_DIRS,/*.s /*.mid /*.lib /*.bin /*.o /*.a /*.ho /*~)
 	-rm -f $(call ADD_ALL_EXESUFS,mplayer mencoder)
-	for dir in $(FFMPEGPARTS); do make -C $$dir clean; done
+
+h264_clean::
+	$(MAKE) -C libh264 clean
+	$(MAKE) -C libh264/jzsoc clean
+h264:
+	$(MAKE) h264_clean; $(MAKE)
+ 
+p0_clean::
+	$(MAKE) -C libh264 clean
+
+#p1_clean::
+#	$(MAKE) -C libh264/jzsoc clean
 
 genclean:
 	$(MAKE) -C libavcodec/ genclean
@@ -1041,7 +1072,8 @@ distclean: clean testsclean toolsclean driversclean dhahelperclean dhahelperwinc
 	-rm -f $(call ADD_ALL_DIRS,/*.d)
 	-rm -f help_mp.h version.h $(VIDIX_PCI_FILES) TAGS tags
 	-rm -f $(call ADD_ALL_EXESUFS,codec-cfg cpuinfo)
-	-rm -rf libavcodec/costablegen *.bin
+	-rm -fr libavcodec/costablegen libh264/rel/ libvp8/rel/
+#	-rm -f libavutil/avconfig.h
 
 doxygen:
 	doxygen DOCS/tech/Doxyfile

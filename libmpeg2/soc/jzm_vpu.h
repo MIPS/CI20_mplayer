@@ -6,6 +6,7 @@
 /****************************************************************
   VPU register map
 *****************************************************************/
+#define JZM_V2_TLB
 
 #ifdef JZM_HUNT_SIM
 # include "hunt.h"
@@ -36,6 +37,7 @@
 /********************************************
   SCH (Scheduler)
 *********************************************/
+#define TCSM_FLUSH           0xc0000
 #define REG_SCH_GLBC         0x00000
 #define SCH_GLBC_SLDE        (0x1<<31)
 #define SCH_GLBC_TLBE        (0x1<<30)
