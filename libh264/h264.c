@@ -3892,10 +3892,10 @@ static int decode_slice(struct AVCodecContext *avctx, void *arg){
       st_h264.bs_index                    = s->gb.index;
       st_h264.bs_size_in_bits             = s->gb.size_in_bits; 
       st_h264.cabac_init_idc              = h->cabac_init_idc;
-      st_h264.ref_frm_ctrl                = h->ref_list[1][0].frm_info_ctrl;
-      st_h264.ref_frm_mv                  = h->ref_list[1][0].frm_info_mv;
-      st_h264.curr_frm_ctrl               = s->current_picture.frm_info_ctrl;
-      st_h264.curr_frm_mv                 = s->current_picture.frm_info_mv;
+      st_h264.ref_frm_ctrl                = get_phy_addr(h->ref_list[1][0].frm_info_ctrl);
+      st_h264.ref_frm_mv                  = get_phy_addr(h->ref_list[1][0].frm_info_mv);
+      st_h264.curr_frm_ctrl               = get_phy_addr(s->current_picture.frm_info_ctrl);
+      st_h264.curr_frm_mv                 = get_phy_addr(s->current_picture.frm_info_mv);
       st_h264.curr_frm_slice_start_mb     = s->current_picture.frm_info_slice_start_mb;
       st_h264.ref_frm_slice_start_mb      = h->ref_list[1][0].frm_info_slice_start_mb;
       st_h264.use_weight                  = h->use_weight;
@@ -4287,9 +4287,6 @@ static int decode_frame(AVCodecContext *avctx,
         av_log(avctx, AV_LOG_ERROR, "no frame!\n");
         return -1;
     }
-
-
-   
 
 #ifdef JZC_CRC_VER
     {

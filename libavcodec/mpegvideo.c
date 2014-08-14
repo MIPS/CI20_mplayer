@@ -290,10 +290,10 @@ int ff_alloc_picture(MpegEncContext *s, Picture *pic, int shared){
 
 	if (s->codec_id == CODEC_ID_H264){
 #define SDE_FMV_ADS (1 << 8)
-            pic->frm_info_ctrl_base = jz4740_alloc_frame(128,mb_array_size*sizeof(uint32_t)*2);
+            pic->frm_info_ctrl_base = jz4740_alloc_frame(256,mb_array_size*sizeof(uint32_t)*2 + SDE_FMV_ADS);
             pic->frm_info_ctrl = (unsigned int)(pic->frm_info_ctrl_base);
             
-            pic->frm_info_mv_base = jz4740_alloc_frame(128,mb_array_size*sizeof(uint32_t)*32);
+            pic->frm_info_mv_base = jz4740_alloc_frame(256,mb_array_size*sizeof(uint32_t)*32 + SDE_FMV_ADS);
             pic->frm_info_mv = (unsigned int)pic->frm_info_mv_base;
             
             pic->frm_info_slice_start_mb_base = jz4740_alloc_frame(128,sizeof(int32_t)*32);
