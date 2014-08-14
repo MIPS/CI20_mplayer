@@ -7,4 +7,4 @@
 	--disable-faac-lavc --enable-pvr --disable-tv-v4l1 --enable-tv-v4l2 \
 	--extra-ldflags="-L./libmad" \
 	--extra-cflags="-mips32 -I./libmad/libmad-0.15.1b/ -imacros ./libjzcommon/com_config.h" \
-	--enable-debug --enable-gui
+	--enable-debug --enable-gui --enable-xshape
